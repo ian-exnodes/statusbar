@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, prettyModel, quotaColor, quotas, rows, tokens } from './format'
+import { barColor, effortColor, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
@@ -28,9 +28,9 @@ describe('statusbar rows', () => {
 
   test('two rows with the statusline.sh text and colors', async () => {
     const [top = [], bottom = []] = rows(base)
-    expect(plain(top)).toBe('[Opus 5.5] 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] ⚙ 📁 main-2 | 🌿 main +1~2')
     expect(plain(bottom)).toBe('███░░░░░░░ 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m 5s')
-    expect(colorOf(top, 'Opus')).toBe('cyan')
+    expect(colorOf(top, 'Opus')).toBe('magenta')
     expect(colorOf(top, '+1')).toBe('green')
     expect(colorOf(top, '~2')).toBe('yellow')
     expect(colorOf(bottom, '↑')).toBe('cyan')
@@ -67,5 +67,50 @@ describe('statusbar rows', () => {
   test('no git segment outside a repo', async () => {
     const [top = []] = rows({ ...base, branch: undefined })
     expect(plain(top)).not.toContain('🌿')
+  })
+
+  test('the model is colored by family; unknown ids stay cyan', async () => {
+    expect(modelColor('claude-opus-5-5')).toBe('magenta')
+    expect(modelColor('claude-opus-5-5[1m]')).toBe('magenta')
+    expect(modelColor('claude-sonnet-5-5')).toBe('blue')
+    expect(modelColor('claude-haiku-4-5-20251001')).toBe('green')
+    expect(modelColor('claude-fable-5-1')).toBe('yellow')
+    expect(modelColor('us.anthropic.claude-opus-5-5-v1')).toBe('magenta')
+    expect(modelColor('some-gateway-model')).toBe('cyan')
+  })
+
+  test('effort colors rise with cost', async () => {
+    expect(effortColor('low')).toBe('subtle')
+    expect(effortColor('medium')).toBe('cyan')
+    expect(effortColor('high')).toBe('yellow')
+    expect(effortColor('xhigh')).toBe('#ff8700')
+    expect(effortColor('max')).toBe('red')
+  })
+
+  test('only the five effort levels are read, in any case', async () => {
+    expect(parseEffort('high')).toBe('high')
+    expect(parseEffort(' High ')).toBe('high')
+    expect(parseEffort('XHIGH')).toBe('xhigh')
+    expect(parseEffort('auto')).toBeUndefined()
+    expect(parseEffort('')).toBeUndefined()
+    expect(parseEffort(5)).toBeUndefined()
+    expect(parseEffort(undefined)).toBeUndefined()
+  })
+
+  test('the picker marks a model current only for the same version', async () => {
+    expect(sameModel('claude-opus-5-5', 'claude-opus-5-5[1m]')).toBe(true)
+    expect(sameModel('claude-opus-5-5', 'claude-opus-4-1')).toBe(false)
+    expect(sameModel('claude-haiku-4-5-20251001', 'claude-haiku-4-5')).toBe(true)
+  })
+
+  test('row 1 shows the effort in its color, then the picker button', async () => {
+    const [top = []] = rows({ ...base, effort: 'high' })
+    expect(plain(top)).toBe('[Opus 5.5] high ⚙ 📁 main-2 | 🌿 main +1~2')
+    expect(colorOf(top, 'high')).toBe('yellow')
+    expect(top.find(s => s.isPicker)?.text).toBe('⚙')
+
+    const [unknown = []] = rows(base)
+    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ 📁 main-2 | 🌿 main +1~2')
+    expect(plain(unknown)).not.toContain('undefined')
   })
 })
