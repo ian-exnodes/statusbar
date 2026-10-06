@@ -72,6 +72,14 @@ describe('statusbar rows', () => {
     expect(at(3_600_000)).toContain('⏱️ 1h 0m')
   })
 
+  test('row 1 shows ◐ Clean after the button while Clean View is on', async () => {
+    const [on = []] = rows({ ...base, isClean: true })
+    expect(plain(on)).toBe('[Opus 5.5] ⚙ Command ◐ Clean | 📁 main-2 | 🌿 main +1~2')
+    expect(colorOf(on, '◐')).toBe('green')
+    const [off = []] = rows(base)
+    expect(plain(off)).not.toContain('◐')
+  })
+
   test('no git segment outside a repo', async () => {
     const [top = []] = rows({ ...base, branch: undefined })
     expect(plain(top)).not.toContain('🌿')
