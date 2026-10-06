@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { EFFORTS, MODELS, effortColor, modelColor, parseEffort, quotas, rows, sameModel } from './format'
+import { EFFORTS, MODELS, effortColor, effortFromCommand, mainEffort, modelColor, parseEffort, quotas, rows, sameModel } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -102,9 +102,9 @@ export const register: Register = on => {
     return r
   })
 
-  // The level each request actually carries, after any downgrade for the model
+  // The level each main-loop request actually carries, after any downgrade for the model
   on('turn.step', async function* ($, e, next) {
-    const level = parseEffort(e.effort)
+    const level = mainEffort(e)
     if (level) {
       await update($, effort, () => level)
       await update($, figures, f => f && { ...f, effort: level })
@@ -115,7 +115,7 @@ export const register: Register = on => {
   // Typed or run from the picker: redraw right after, not at the next turn
   on('command.run', { command: 'effort' }, async ($, e, next) => {
     const r = await next(e)
-    const level = parseEffort(e.args)
+    const level = effortFromCommand(e.args, r.text ?? '')
     if (level) await update($, effort, () => level)
     await refresh($)
     return r

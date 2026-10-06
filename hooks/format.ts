@@ -39,6 +39,14 @@ export const parseEffort = (value: unknown): StatusEffort | undefined => {
 
 export const sameModel = (a: string, b: string) => prettyModel(a) === prettyModel(b)
 
+// turn.step fires for subagents too, and an agent may run at its own effort: only the main loop's counts
+export const mainEffort = (step: { effort?: unknown; agentId?: string }) =>
+  step.agentId === undefined ? parseEffort(step.effort) : undefined
+
+// After /effort ran: a cancelled confirm reads "Kept …" (as /model's does) and changed nothing
+export const effortFromCommand = (args: string, output: string) =>
+  /^Kept\b|cancel/i.test(output.trim()) ? undefined : parseEffort(args)
+
 export const tokens = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`
 

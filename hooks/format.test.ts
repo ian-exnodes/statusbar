@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, effortColor, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
+import { barColor, effortColor, effortFromCommand, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
@@ -101,6 +101,19 @@ describe('statusbar rows', () => {
     expect(sameModel('claude-opus-5-5', 'claude-opus-5-5[1m]')).toBe(true)
     expect(sameModel('claude-opus-5-5', 'claude-opus-4-1')).toBe(false)
     expect(sameModel('claude-haiku-4-5-20251001', 'claude-haiku-4-5')).toBe(true)
+  })
+
+  test("a subagent's requests do not change the session's effort", async () => {
+    expect(mainEffort({ effort: 'xhigh' })).toBe('xhigh')
+    expect(mainEffort({ effort: 'low', agentId: 'agent-1' })).toBeUndefined()
+    expect(mainEffort({ effort: 4 })).toBeUndefined()
+  })
+
+  test('/effort is recorded only when Claude Code applied it', async () => {
+    expect(effortFromCommand('medium', 'Set effort level to medium (this session only)')).toBe('medium')
+    expect(effortFromCommand('max', 'Kept effort as high')).toBeUndefined()
+    expect(effortFromCommand('max', 'Effort change cancelled')).toBeUndefined()
+    expect(effortFromCommand('auto', 'Set effort level to auto')).toBeUndefined()
   })
 
   test('row 1 shows the effort in its color, then the picker button', async () => {
