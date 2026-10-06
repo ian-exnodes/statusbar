@@ -61,11 +61,14 @@ async function seedTurn($: EngineInterface) {
   }
 }
 
-// Live figures between events, like a statusLine command re-run by the CLI; git stays on events
+// Live figures between events, like a statusLine command re-run by the CLI; git stays on events.
+// The model is read here too: no event reaches a user plugin when it changes (an interactive /model raises
+// no command.run, and cc-plugin-sec-default keeps classic.PostModelSwitch from user-tier plugins)
 async function tick($: EngineInterface) {
-  const [usage, now] = await Promise.all([$.session.usage(), $.clock.now()])
+  const [usage, now, model] = await Promise.all([$.session.usage(), $.clock.now(), $.session.model()])
   await update($, figures, f => f && {
     ...f,
+    model,
     percent: usage.context.percent ?? 0,
     tokensIn: usage.context.tokens ?? 0,
     usd: usage.cost?.usd ?? 0,
@@ -121,13 +124,6 @@ export const register: Register = on => {
     return r
   })
 
-  // Once a model switch has landed, whoever made it (/model typed or picked, /config, a fallback).
-  // Not command.run: an interactive /model resolves before its switch lands, so a refresh there reads the old model
-  on('classic.PostModelSwitch', async ($, e, next) => {
-    const r = await next(e)
-    await update($, figures, f => f && { ...f, model: e.to_model })
-    return r
-  })
 
   // Below the prompt, where a statusLine command draws: our rows, then the engine's own hint line
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
