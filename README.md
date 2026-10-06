@@ -11,8 +11,9 @@ It sits below the prompt, under Claude Code's own mode line (`▸▸ bypass perm
 
 ## Requirements
 
-- A Claude Code build that supports plugin function hooks (built and tested on 2.1.290)
+- **Claude Code 2.1.290 or later** (check with `claude --version`). Older versions, such as 2.1.241, install the plugin and list it as enabled but show nothing, because they can't run plugin function hooks. Run `claude update`; if it stays on an older version, set the auto-update channel to **latest** in `/config` and update again.
 - `git` on your `PATH` (for the branch and change counts)
+- Tested on macOS only.
 
 ## Install
 
