@@ -8,16 +8,12 @@ const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
 const lastTurnTokens = atom({ plugin: 'statusbar', key: 'lastTurnTokens' } as const, null)
 const turnDelta = atom({ plugin: 'statusbar', key: 'turnDelta' } as const, null)
 const effort = atom({ plugin: 'statusbar', key: 'effort' } as const, null)
-const PICKER = 'statusbar-picker'
+// The picker is a band above the prompt: a few rows in every layout. A pane would close on Esc (a band never
+// hears Esc) but docks full height beside the transcript in the fullscreen layout; the small box won
+const isPickerOpen = atom({ plugin: 'statusbar', key: 'isPickerOpen' } as const, false)
 
-// A pane, so Esc closes it (closeOnEscape); a band cannot hear Esc. In the fullscreen layout a pane docks beside the transcript
-async function togglePicker($: EngineInterface) {
-  const isOpen = (await $.ui.panes()).some(p => p.id === PICKER)
-  if (isOpen) return $.ui.close({ id: PICKER })
-  await $.ui.open({ id: PICKER, title: 'Model & effort', focus: true, closeOnEscape: true, rows: 3 })
-}
-
-const closePicker = ($: EngineInterface) => $.ui.close({ id: PICKER }).catch(() => undefined)
+const togglePicker = ($: EngineInterface) => update($, isPickerOpen, open => !open)
+const closePicker = ($: EngineInterface) => update($, isPickerOpen, () => false)
 
 const lines = (s: string) => s.split('\n').filter(Boolean).length
 
@@ -167,10 +163,11 @@ export const register: Register = on => {
     return { text: '' }
   })
 
-  on('ui.render', { component: 'Pane', requestId: PICKER }, async ($, e) => {
-    const f = await read($, figures)
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const [isOpen, f] = await Promise.all([read($, isPickerOpen), read($, figures)])
+    if (!isOpen || f === null || e.props.hasSurvey) return next(e)
+
     const { Box, Text, Button } = $.ui.resolve(e)
-    if (f === null) return <Text dimColor>Reading the session…</Text>
 
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply
     const run = (command: 'model' | 'effort', args: string) =>
@@ -199,7 +196,7 @@ export const register: Register = on => {
     )
 
     return (
-      <Box flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
         <Box>
           <Box width={8}><Text dimColor>MODEL</Text></Box>
           {MODELS.map(m => option(`model-${m.id}`, m.label,
