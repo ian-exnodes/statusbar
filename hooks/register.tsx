@@ -146,7 +146,7 @@ export const register: Register = on => {
         {rows(f).map((row, i) => (
           <Box key={`row${i}`}>
             {row.map(s => s.isPicker
-              ? <Button key="picker" plain label={s.text} onPress={() => void togglePicker($)} />
+              ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
               : <Text color={s.color}>{s.text}</Text>)}
           </Box>
         ))}
