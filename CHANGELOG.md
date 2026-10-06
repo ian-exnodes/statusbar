@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.7.1 (2026-10-06)
+
+### Fixed
+
+- The picker is the small box above the prompt again. In 0.7.0 it opened as a full-height panel beside the
+  transcript in the fullscreen layout. It closes on `✕`, the button again, `/statusbar`, or sending a message;
+  Esc does not close it.
+
 ## 0.7.0 (2026-10-06)
 
 ### Added
