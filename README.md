@@ -3,7 +3,7 @@
 A Claude Code plugin (a "mod") that draws a colored, live status line under the prompt input:
 
 ```
-[Opus 5.5] 📁 main-2 | 🌿 main +1~2
+[Opus 5.5] high ⚙ 📁 main-2 | 🌿 main +1~2
 ██░░░░░░░░ 21% | 5h ███████░░░ 76% | 7d █████████░ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m 47s | ▲ +21.4k last turn
 ```
 
@@ -54,7 +54,9 @@ claude plugin marketplace remove ian-exnodes
 
 | Shown | Meaning |
 |---|---|
-| `[Opus 5.5]` (cyan) | The model this session runs on. |
+| `[Opus 5.5]` | The model this session runs on, colored by family: Opus magenta, Sonnet blue, Haiku green, Fable yellow. Other models are cyan. |
+| `high` | The session's reasoning effort, colored by cost: low gray, medium cyan, high yellow, xhigh orange, max red. Hidden until known. |
+| `⚙` | Opens the model and effort picker. |
 | `📁 main-2` | The last folder of the session's working directory. |
 | `🌿 main` | The current git branch. Hidden outside a git repo. |
 | `+1` (green) | Files with **staged** changes (`git diff --cached`). |
@@ -75,10 +77,23 @@ claude plugin marketplace remove ian-exnodes
 
 The 5h and 7d bars appear only on a Claude subscription, once Claude Code has received its first limit reading. Other sessions (API key, gateways) show the line without them.
 
+### Picker
+
+Press `⚙` (or run `/statusbar`) to open a small box above the prompt:
+
+    MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
+    EFFORT  Low  Medium  High  Xhigh  Max
+
+The current model and effort are highlighted. Picking one runs `/model` or `/effort` for you, for this
+session only. In a long conversation, switching model or effort can show Claude Code's own confirmation,
+because the change makes the model read the whole conversation again; if you cancel, nothing changes.
+The box closes on `✕` or when you send a message.
+
 ## When it updates
 
 - Every second: context %, quotas, `↑`, `$`, and the timer.
 - At session start and after each turn: model, folder, git branch and counts, `↓`, and `last turn`.
+- Right after `/model` or `/effort`, typed or picked: model and effort.
 
 ## Your own status line
 
@@ -86,7 +101,7 @@ If you already have a `statusLine` command in `~/.claude/settings.json`, it keep
 
 ## What it runs
 
-Only read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files.
+Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it runs `/model` or `/effort`, as if you typed them.
 
 ## Develop
 
