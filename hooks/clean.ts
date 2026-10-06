@@ -83,4 +83,30 @@ export const isFinalAnswer = (text: string, finals: readonly string[]) => {
   return block.length > 0 && finals.some(f => f.includes(block))
 }
 
+// Read by Claude beside each prompt while Clean View is on, never shown to the person. The plugin's own tool,
+// because Claude Code's task tools (TaskCreate, TodoWrite) are present in some sessions and absent in others
+export const CHECKLIST_TOOL = 'mcp__statusbar__checklist'
+export const CLEAN_VIEW_NOTE = 'The person is using Clean View: they see a checklist of your steps, not your tool calls. '
+  + `Before working on a request, call ${CHECKLIST_TOOL} with a few short tasks (subject: a plain-language step, `
+  + 'under 50 characters; status pending, in_progress or completed). Call it again, with the whole list, whenever a '
+  + 'task starts or finishes. For a quick question, one task is enough. If the tool is not loaded yet, load it first '
+  + `with ToolSearch, query "select:${CHECKLIST_TOOL}".`
+
+export const withCleanViewNote = (context: readonly string[] | undefined) =>
+  context?.includes(CLEAN_VIEW_NOTE) ? [...context] : [...(context ?? []), CLEAN_VIEW_NOTE]
+
+const STATUSES: readonly string[] = ['pending', 'in_progress', 'completed']
+
+// The checklist tool's input comes from the model: keep the well-formed tasks, drop the rest
+export const toolChecklist = (c: CleanChecklist, input: unknown): CleanChecklist => {
+  const tasks = (input as { tasks?: unknown } | null)?.tasks
+  if (!Array.isArray(tasks)) return c
+  const valid = tasks.flatMap(t => {
+    const { subject, status = 'pending' } = (t ?? {}) as { subject?: unknown; status?: unknown }
+    return typeof subject === 'string' && typeof status === 'string' && STATUSES.includes(status)
+      ? [{ content: subject, status: status as CleanTaskStatus }] : []
+  })
+  return todosWritten(c, valid)
+}
+
 export const addFinal = (finals: readonly string[], answer: string) => [...finals, answer].slice(-FINALS_KEPT)

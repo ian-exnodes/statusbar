@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import {
-  addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
+  CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
 } from './clean'
 
 const start = startChecklist('Build a weather dashboard for New York with live data and a shareable link', 0)
@@ -77,6 +77,30 @@ describe('clean view', () => {
     expect(isFinalAnswer('It refreshes every 10 minutes.', finals)).toBe(true)
     expect(isFinalAnswer('Let me check the weather API first.', finals)).toBe(false)
     expect(isFinalAnswer('   ', finals)).toBe(false)
+  })
+
+  test('the planning note rides along with the prompt, once', async () => {
+    expect(withCleanViewNote(undefined)).toEqual([CLEAN_VIEW_NOTE])
+    expect(withCleanViewNote(['other note'])).toEqual(['other note', CLEAN_VIEW_NOTE])
+    expect(withCleanViewNote([CLEAN_VIEW_NOTE])).toEqual([CLEAN_VIEW_NOTE])
+    expect(CLEAN_VIEW_NOTE).toContain('mcp__statusbar__checklist')
+    expect(CLEAN_VIEW_NOTE).toContain('select:mcp__statusbar__checklist')
+  })
+
+  test("the plugin's checklist tool replaces the list, skipping malformed entries", async () => {
+    const c = toolChecklist(four, { tasks: [
+      { subject: 'Read the files', status: 'completed' },
+      { subject: 'Count the lines', status: 'in_progress' },
+      { subject: 42, status: 'pending' },
+      { subject: 'Report', status: 'later' },
+      { subject: 'Report the counts' },
+    ] })
+    expect(c.tasks).toEqual([
+      { id: 'todo-0', subject: 'Read the files', status: 'completed' },
+      { id: 'todo-1', subject: 'Count the lines', status: 'in_progress' },
+      { id: 'todo-2', subject: 'Report the counts', status: 'pending' },
+    ])
+    expect(toolChecklist(four, 'nonsense')).toEqual(four)
   })
 
   test('only the last 50 final answers are kept', async () => {

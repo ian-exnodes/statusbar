@@ -3,6 +3,7 @@ import type { BuiltinToolResults, EngineInterface, Register, RenderInput, Resolv
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
+  toolChecklist, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -34,11 +35,6 @@ const empty = ($: EngineInterface, e: ResolveInput) => {
   const { Box } = $.ui.resolve(e)
   return <Box />
 }
-
-const CLEAN_VIEW_SECTION = 'The person is using Clean View: they see a checklist of your tasks, not your tool calls. '
-  + 'Before working on a request, break it into a few short tasks with TaskCreate (subject: a plain-language step, '
-  + 'under 50 characters). Mark each task in_progress when you start it and completed when it is done. '
-  + 'For a quick question, one task is enough.'
 
 const loadCleanView = async ($: EngineInterface) => {
   const stored = await $.store.get('cleanView')
@@ -159,6 +155,27 @@ export const register: Register = on => {
     const r = await next(e)
     await $.command.register({ name: 'statusbar', description: 'Open or close the model and effort picker' })
     await loadCleanView($)
+    await $.tool.register({
+      name: 'checklist',
+      description: "Shows the person your plan as a checklist while Clean View is on. Send the whole list each call.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                subject: { type: 'string', description: 'A plain-language step, under 50 characters' },
+                status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+              },
+              required: ['subject', 'status'],
+            },
+          },
+        },
+        required: ['tasks'],
+      },
+    })
     await seedTurn($)
     await refresh($)
     ticker?.cancel()
@@ -225,8 +242,11 @@ export const register: Register = on => {
 
   // The person sending a message closes it; another plugin's prompt does not
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind !== 'plugin') await closePicker($)
-    return next(e)
+    if (e.origin.kind === 'plugin') return next(e)
+    await closePicker($)
+    // Clean View's planning note rides with the person's prompt as context they never see:
+    // cc-plugin-sec-default keeps user-tier plugins out of prompt.compose (the system prompt)
+    return (await read($, cleanView)) ? next({ ...e, context: withCleanViewNote(e.context) }) : next(e)
   })
 
   // A second way in, in case a click on ⚙ under the prompt does not reach the plugin
@@ -308,6 +328,15 @@ export const register: Register = on => {
   })
 
   // Claude's task calls build the card; a subagent's own tasks are not the person's request
+  // The plugin's own checklist tool (CHECKLIST_TOOL): answered here, nothing beneath runs. The generated types list
+  // only the tools present at the last load, and the validator reads the name only as a literal, hence the cast
+  on('tool.call', { tool: 'mcp__statusbar__checklist' as never }, async ($, e: { agentId?: string }) => {
+    if (e.agentId === undefined && (await read($, cleanView))) {
+      await update($, checklist, c => c && toolChecklist(c, e))
+    }
+    return { result: 'Checklist shown to the person.', text: 'Checklist shown to the person.' }
+  })
+
   on('tool.call', { tool: 'TaskCreate' }, async ($, e, next) => {
     const r = await next(e)
     if (r.deny === undefined && e.agentId === undefined && (await read($, cleanView))) {
@@ -332,12 +361,6 @@ export const register: Register = on => {
       await update($, checklist, c => c && todosWritten(c, e.todos))
     }
     return r
-  })
-
-  on('prompt.compose', async ($, e, next) => {
-    const r = await next(e)
-    if (!(await read($, cleanView))) return r
-    return { ...r, sections: [...r.sections, { id: 'statusbar.clean-view', text: CLEAN_VIEW_SECTION, scope: 'session' as const }] }
   })
 
   // Drawing only: the stored transcript is untouched, so switching Clean View off shows every row again

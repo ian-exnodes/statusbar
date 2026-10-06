@@ -174,3 +174,15 @@ The plan starts with a throwaway probe that settles it.
 ## Release
 
 0.8.0: README section, CHANGELOG entry, GitHub release; branch, PR, merge.
+
+## Changes during implementation
+
+- One hooks module per plugin, and `$` is followed only within one file: Clean View's engine code lives in
+  `hooks/register.tsx`; the pure logic stays in `hooks/clean.ts`; there is no `clean-view.tsx`.
+- A transcript row is hidden by drawing an empty `Box`; a `ui.render` hook returning `null` fails.
+- `prompt.compose` is bypassed for user-tier plugins (cc-plugin-sec-default), so the planning instruction rides with
+  each of the person's prompts as `prompt.submit` `context`, which only Claude reads.
+- Claude Code's task tools are present in some sessions and absent in others (`ToolSearch: none found: TaskCreate`),
+  so the plugin registers its own tool, `mcp__statusbar__checklist` (the whole list each call), and the note asks
+  Claude to use it, loading it through ToolSearch if it is deferred. The TaskCreate / TaskUpdate / TodoWrite hooks
+  stay for sessions that have them.
