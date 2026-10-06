@@ -3,7 +3,7 @@
 A Claude Code plugin (a "mod") that draws a colored, live status line under the prompt input:
 
 ```
-[Opus 5.5] 📁 main-2 | 🌿 main +1~2
+[Opus 5.5] high [ ⚙ Command ] | 📁 main-2 | 🌿 main +1~2
 ██░░░░░░░░ 21% | 5h ███████░░░ 76% | 7d █████████░ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m 47s | ▲ +21.4k last turn
 ```
 
@@ -41,6 +41,8 @@ claude plugin marketplace update ian-exnodes
 claude plugin update statusbar@ian-exnodes
 ```
 
+What changed in each version: [CHANGELOG.md](CHANGELOG.md). To be notified of new versions, **Watch → Custom → Releases** on this repo.
+
 ### Uninstall
 
 ```bash
@@ -54,7 +56,9 @@ claude plugin marketplace remove ian-exnodes
 
 | Shown | Meaning |
 |---|---|
-| `[Opus 5.5]` (cyan) | The model this session runs on. |
+| `[Opus 5.5]` | The model this session runs on, colored by family: Opus magenta, Sonnet blue, Haiku green, Fable yellow. Other models are cyan. |
+| `high` | The session's reasoning effort, colored by cost: low gray, medium cyan, high yellow, xhigh orange, max red. Hidden until known. |
+| `[ ⚙ Command ]` | A button: opens the model and effort picker. |
 | `📁 main-2` | The last folder of the session's working directory. |
 | `🌿 main` | The current git branch. Hidden outside a git repo. |
 | `+1` (green) | Files with **staged** changes (`git diff --cached`). |
@@ -75,10 +79,26 @@ claude plugin marketplace remove ian-exnodes
 
 The 5h and 7d bars appear only on a Claude subscription, once Claude Code has received its first limit reading. Other sessions (API key, gateways) show the line without them.
 
+### Picker
+
+Press `⚙ Command` (or run `/statusbar`) to open the picker:
+
+    MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
+    EFFORT  Low  Medium  High  Xhigh  Max
+
+The current model and effort are highlighted. A model is set through `/config`'s Model setting, which switches
+at once and, like `/model`, also makes it your default for new sessions. When Claude Code needs to ask first (in a
+long conversation, where the new model reads the whole conversation again, or Fable's one-time consent), the picker
+runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort`: it applies to
+the session at once and also becomes that model's default effort for new sessions, as typing `/effort` does.
+Claude Code prints nothing for it in the transcript; the status bar shows the new level.
+It closes on Esc, `✕`, pressing `⚙ Command` again, or when you send a message. In the fullscreen layout it opens as a panel beside the transcript.
+
 ## When it updates
 
 - Every second: context %, quotas, `↑`, `$`, and the timer.
 - At session start and after each turn: model, folder, git branch and counts, `↓`, and `last turn`.
+- Right after `/model` or `/effort`, typed or picked: model and effort.
 
 ## Your own status line
 
@@ -86,7 +106,7 @@ If you already have a `statusLine` command in `~/.claude/settings.json`, it keep
 
 ## What it runs
 
-Only read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files.
+Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would.
 
 ## Develop
 
