@@ -1,6 +1,9 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { BuiltinToolResults, EngineInterface, Register, RenderInput, ResolveInput } from 'claude-code'
 
+import {
+  BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
+} from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
@@ -14,6 +17,67 @@ const isPickerOpen = atom({ plugin: 'statusbar', key: 'isPickerOpen' } as const,
 
 const togglePicker = ($: EngineInterface) => update($, isPickerOpen, open => !open)
 const closePicker = ($: EngineInterface) => update($, isPickerOpen, () => false)
+
+// Clean View: hides Claude's work rows and shows a checklist card (pure logic in clean.ts)
+const cleanView = atom({ plugin: 'statusbar', key: 'cleanView' } as const, false)
+const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
+const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
+
+// A row drawn as nothing: a ui.render hook that returns null fails and the engine draws the row anyway
+const empty = ($: EngineInterface, e: ResolveInput) => {
+  const { Box } = $.ui.resolve(e)
+  return <Box />
+}
+
+const CLEAN_VIEW_SECTION = 'The person is using Clean View: they see a checklist of your tasks, not your tool calls. '
+  + 'Before working on a request, break it into a few short tasks with TaskCreate (subject: a plain-language step, '
+  + 'under 50 characters). Mark each task in_progress when you start it and completed when it is done. '
+  + 'For a quick question, one task is enough.'
+
+const loadCleanView = async ($: EngineInterface) => {
+  const stored = await $.store.get('cleanView')
+  await update($, cleanView, () => stored === true)
+}
+
+const endCleanTurn = async ($: EngineInterface, e: { answer: string; reason: string; isAborted: boolean }) => {
+  await update($, finals, list => addFinal(list, e.answer))
+  if (!(await read($, cleanView))) return
+  const now = await $.clock.now()
+  const outcome = e.reason === 'answer' && !e.isAborted ? 'answer' : 'stopped'
+  await update($, checklist, c => c && c.endedAt === undefined ? turnEnded(c, now, outcome) : c)
+}
+
+// The Clean View card for the band above the prompt, or null while there is none to show
+const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
+  const [isOn, c, f] = await Promise.all([read($, cleanView), read($, checklist), read($, figures)])
+  if (!isOn || c === null || e.props.hasSurvey) return null
+
+  const { Box, Text } = $.ui.resolve(e)
+  const accent = modelColor(f?.model ?? '')
+  const k = card(c, await $.clock.now(), accent)
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1}>
+      <Text bold><Text color={accent}>✧ </Text>{k.title}</Text>
+      {k.step && (
+        <Box>
+          <Box width={14}><Text>{k.step}</Text></Box>
+          <Text color={accent}>{'▓'.repeat(k.filled)}</Text>
+          <Text dimColor>{'░'.repeat(BAR_CELLS - k.filled)}</Text>
+        </Box>
+      )}
+      {k.rows.map((row, i) => (
+        <Box key={`task${i}`}>
+          <Box flexGrow={1}>
+            <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.mark} {row.subject}</Text>
+          </Box>
+          <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
+        </Box>
+      ))}
+      {k.footer && <Text color={c.outcome === 'answer' ? 'green' : undefined} dimColor={c.outcome !== 'answer'}>{k.footer}</Text>}
+    </Box>
+  )
+}
 
 const lines = (s: string) => s.split('\n').filter(Boolean).length
 
@@ -88,6 +152,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
     await $.command.register({ name: 'statusbar', description: 'Open or close the model and effort picker' })
+    await loadCleanView($)
     await seedTurn($)
     await refresh($)
     ticker?.cancel()
@@ -106,6 +171,7 @@ export const register: Register = on => {
     await update($, tokensOut, n => n + (e.usage?.output_tokens ?? 0))
     const r = await next(e)
     await recordTurn($)
+    await endCleanTurn($, e)
     await refresh($)
     return r
   })
@@ -164,10 +230,11 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const [isOpen, f] = await Promise.all([read($, isPickerOpen), read($, figures)])
-    if (!isOpen || f === null || e.props.hasSurvey) return next(e)
-
+    const [isOpen, f, below, card] = await Promise.all([read($, isPickerOpen), read($, figures), next(e), cleanCard($, e)])
     const { Box, Text, Button } = $.ui.resolve(e)
+    // The Clean View card sits above whatever else the band holds
+    const rest = card ? <Box flexDirection="column">{card}{below}</Box> : below
+    if (!isOpen || f === null || e.props.hasSurvey) return rest
 
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply
     const run = (command: 'model' | 'effort', args: string) =>
@@ -211,5 +278,60 @@ export const register: Register = on => {
         </Box>
       </Box>
     )
+  })
+
+  // Clean View
+
+  on('turn.start', async ($, e, next) => {
+    if (await read($, cleanView)) {
+      const now = await $.clock.now()
+      await update($, checklist, () => startChecklist(e.text, now))
+    }
+    return next(e)
+  })
+
+  // Claude's task calls build the card; a subagent's own tasks are not the person's request
+  on('tool.call', { tool: 'TaskCreate' }, async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && e.agentId === undefined && (await read($, cleanView))) {
+      // next(e) is typed for any tool; this hook only ever sees TaskCreate
+      const { id, subject } = (r.result as BuiltinToolResults['TaskCreate']).task
+      await update($, checklist, c => c && taskCreated(c, id, subject))
+    }
+    return r
+  })
+
+  on('tool.call', { tool: 'TaskUpdate' }, async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && e.agentId === undefined && (await read($, cleanView))) {
+      await update($, checklist, c => c && taskUpdated(c, { taskId: e.taskId, subject: e.subject, status: e.status }))
+    }
+    return r
+  })
+
+  on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
+    const r = await next(e)
+    if (r.deny === undefined && e.agentId === undefined && (await read($, cleanView))) {
+      await update($, checklist, c => c && todosWritten(c, e.todos))
+    }
+    return r
+  })
+
+  on('prompt.compose', async ($, e, next) => {
+    const r = await next(e)
+    if (!(await read($, cleanView))) return r
+    return { ...r, sections: [...r.sections, { id: 'statusbar.clean-view', text: CLEAN_VIEW_SECTION, scope: 'session' as const }] }
+  })
+
+  // Drawing only: the stored transcript is untouched, so switching Clean View off shows every row again
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
+
+  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    const [isOn, list] = await Promise.all([read($, cleanView), read($, finals)])
+    if (!isOn || isFinalAnswer(e.props.text, list)) return next(e)
+    return empty($, e)
   })
 }
