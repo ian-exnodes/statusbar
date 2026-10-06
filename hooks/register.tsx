@@ -20,6 +20,12 @@ const closePicker = ($: EngineInterface) => update($, isPickerOpen, () => false)
 
 // Clean View: hides Claude's work rows and shows a checklist card (pure logic in clean.ts)
 const cleanView = atom({ plugin: 'statusbar', key: 'cleanView' } as const, false)
+
+// Kept across sessions in the plugin's store; loadCleanView reads it back at session start
+const setCleanView = async ($: EngineInterface, isOn: boolean) => {
+  await update($, cleanView, () => isOn)
+  await $.store.set('cleanView', isOn)
+}
 const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
 
@@ -198,14 +204,14 @@ export const register: Register = on => {
 
   // Below the prompt, where a statusLine command draws: our rows, then the engine's own hint line
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    const [f, hint] = await Promise.all([read($, figures), next(e)])
+    const [f, hint, isClean] = await Promise.all([read($, figures), next(e), read($, cleanView)])
     if (f === null) return hint
 
     const { Box, Text, Button } = $.ui.resolve(e)
 
     return (
       <Box flexDirection="column">
-        {rows(f).map((row, i) => (
+        {rows({ ...f, isClean }).map((row, i) => (
           <Box key={`row${i}`}>
             {row.map(s => s.isPicker
               ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
@@ -230,7 +236,9 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const [isOpen, f, below, card] = await Promise.all([read($, isPickerOpen), read($, figures), next(e), cleanCard($, e)])
+    const [isOpen, f, below, card, isClean] = await Promise.all([
+      read($, isPickerOpen), read($, figures), next(e), cleanCard($, e), read($, cleanView),
+    ])
     const { Box, Text, Button } = $.ui.resolve(e)
     // The Clean View card sits above whatever else the band holds
     const rest = card ? <Box flexDirection="column">{card}{below}</Box> : below
@@ -262,20 +270,29 @@ export const register: Register = on => {
       </Box>
     )
 
+    // The picker draws above the rest of the band (the Clean View card)
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
-        <Box>
-          <Box width={8}><Text dimColor>MODEL</Text></Box>
-          {MODELS.map(m => option(`model-${m.id}`, m.label,
-            sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
-          <Box flexGrow={1} />
-          <Button key="close" plain label="✕" onPress={() => void closePicker($)} />
+      <Box flexDirection="column">
+        <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
+          <Box>
+            <Box width={12}><Text dimColor>MODEL</Text></Box>
+            {MODELS.map(m => option(`model-${m.id}`, m.label,
+              sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
+            <Box flexGrow={1} />
+            <Button key="close" plain label="✕" onPress={() => void closePicker($)} />
+          </Box>
+          <Box>
+            <Box width={12}><Text dimColor>EFFORT</Text></Box>
+            {EFFORTS.map(level => option(`effort-${level}`, level.charAt(0).toUpperCase() + level.slice(1),
+              level === f.effort ? effortColor(level) : undefined, () => void pickEffort(level)))}
+          </Box>
+          <Box>
+            <Box width={12}><Text dimColor>CLEAN VIEW</Text></Box>
+            {option('clean-off', 'Off', isClean ? undefined : 'subtle', () => void setCleanView($, false))}
+            {option('clean-on', 'On', isClean ? 'green' : undefined, () => void setCleanView($, true))}
+          </Box>
         </Box>
-        <Box>
-          <Box width={8}><Text dimColor>EFFORT</Text></Box>
-          {EFFORTS.map(level => option(`effort-${level}`, level.charAt(0).toUpperCase() + level.slice(1),
-            level === f.effort ? effortColor(level) : undefined, () => void pickEffort(level)))}
-        </Box>
+        {rest}
       </Box>
     )
   })
