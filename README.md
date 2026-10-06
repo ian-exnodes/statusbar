@@ -3,7 +3,7 @@
 A Claude Code plugin (a "mod") that draws a colored, live status line under the prompt input:
 
 ```
-[Opus 5.5] high ⚙ 📁 main-2 | 🌿 main +1~2
+[Opus 5.5] high ⚙ Command 📁 main-2 | 🌿 main +1~2
 ██░░░░░░░░ 21% | 5h ███████░░░ 76% | 7d █████████░ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m 47s | ▲ +21.4k last turn
 ```
 
@@ -58,7 +58,7 @@ claude plugin marketplace remove ian-exnodes
 |---|---|
 | `[Opus 5.5]` | The model this session runs on, colored by family: Opus magenta, Sonnet blue, Haiku green, Fable yellow. Other models are cyan. |
 | `high` | The session's reasoning effort, colored by cost: low gray, medium cyan, high yellow, xhigh orange, max red. Hidden until known. |
-| `⚙` | Opens the model and effort picker. |
+| `⚙ Command` | Opens the model and effort picker. |
 | `📁 main-2` | The last folder of the session's working directory. |
 | `🌿 main` | The current git branch. Hidden outside a git repo. |
 | `+1` (green) | Files with **staged** changes (`git diff --cached`). |
@@ -81,7 +81,7 @@ The 5h and 7d bars appear only on a Claude subscription, once Claude Code has re
 
 ### Picker
 
-Press `⚙` (or run `/statusbar`) to open a small box above the prompt:
+Press `⚙ Command` (or run `/statusbar`) to open the picker:
 
     MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
@@ -92,7 +92,7 @@ long conversation, where the new model reads the whole conversation again, or Fa
 runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort`: it applies to
 the session at once and also becomes that model's default effort for new sessions, as typing `/effort` does.
 Claude Code prints nothing for it in the transcript; the status bar shows the new level.
-The box closes on `✕` or when you send a message.
+It closes on Esc, `✕`, pressing `⚙ Command` again, or when you send a message. In the fullscreen layout it opens as a panel beside the transcript.
 
 ## When it updates
 

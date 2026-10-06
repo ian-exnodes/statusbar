@@ -31,7 +31,6 @@ declare module 'claude-code' {
       lastTurnTokens: number | null
       turnDelta: number | null
       effort: StatusEffort | null
-      isPickerOpen: boolean
     }
   }
 }

@@ -28,7 +28,7 @@ describe('statusbar rows', () => {
 
   test('two rows with the statusline.sh text and colors', async () => {
     const [top = [], bottom = []] = rows(base)
-    expect(plain(top)).toBe('[Opus 5.5] ⚙ 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] ⚙ Command 📁 main-2 | 🌿 main +1~2')
     expect(plain(bottom)).toBe('███░░░░░░░ 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m 5s')
     expect(colorOf(top, 'Opus')).toBe('magenta')
     expect(colorOf(top, '+1')).toBe('green')
@@ -134,12 +134,12 @@ describe('statusbar rows', () => {
 
   test('row 1 shows the effort in its color, then the picker button', async () => {
     const [top = []] = rows({ ...base, effort: 'high' })
-    expect(plain(top)).toBe('[Opus 5.5] high ⚙ 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] high ⚙ Command 📁 main-2 | 🌿 main +1~2')
     expect(colorOf(top, 'high')).toBe('yellow')
-    expect(top.find(s => s.isPicker)?.text).toBe('⚙')
+    expect(top.find(s => s.isPicker)?.text).toBe('⚙ Command')
 
     const [unknown = []] = rows(base)
-    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ 📁 main-2 | 🌿 main +1~2')
+    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command 📁 main-2 | 🌿 main +1~2')
     expect(plain(unknown)).not.toContain('undefined')
   })
 })

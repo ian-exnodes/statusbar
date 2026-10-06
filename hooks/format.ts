@@ -96,7 +96,7 @@ export const rows = (f: StatusFigures): Segment[][] => {
       { text: `[${prettyModel(f.model)}]`, color: modelColor(f.model) },
       ...(f.effort ? [{ text: ` ${f.effort}`, color: effortColor(f.effort) }] : []),
       { text: ' ' },
-      { text: '⚙', isPicker: true },
+      { text: '⚙ Command', isPicker: true },
       { text: ` 📁 ${f.dir.split('/').pop()}` },
       ...git,
     ],

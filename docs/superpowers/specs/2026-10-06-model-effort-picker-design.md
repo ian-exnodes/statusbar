@@ -18,7 +18,7 @@ Row 1 today:
 Row 1 after:
 
 ```
-[Opus 5.5] high ⚙ 📁 statusbar | 🌿 main +1~2
+[Opus 5.5] high ⚙ Command 📁 statusbar | 🌿 main +1~2
 ```
 
 - `[Opus 5.5]` is colored by model family: Opus `magenta`, Sonnet `blue`, Haiku `green`, Fable `yellow`.
@@ -101,3 +101,12 @@ status bar redraws right after either.
 - In a live session (`claude --plugin-dir .`): the colors per model, the effort shown before the first
   prompt, `⚙` opens the picker, a pick updates row 1 and Claude Code's own `/effort` hint, `✕` and a
   submitted prompt close it.
+
+## Changes after the live check
+
+- The button reads `⚙ Command`.
+- The picker is a pane (`$.ui.open` with `closeOnEscape`), not a band: the person wanted Esc to close it, and a band
+  never hears Esc. In the fullscreen layout it docks beside the transcript; the person chose that over no Esc.
+- A model is set through `/config`'s Model row (`$.config.set`), falling back to `/model` when the row refuses.
+- The model is read every second: no event reaches a user-tier plugin when it changes.
+- The picker records its own effort pick: a plugin's own `$.command.run` skips its own hooks.

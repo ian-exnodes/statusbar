@@ -8,7 +8,16 @@ const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
 const lastTurnTokens = atom({ plugin: 'statusbar', key: 'lastTurnTokens' } as const, null)
 const turnDelta = atom({ plugin: 'statusbar', key: 'turnDelta' } as const, null)
 const effort = atom({ plugin: 'statusbar', key: 'effort' } as const, null)
-const isPickerOpen = atom({ plugin: 'statusbar', key: 'isPickerOpen' } as const, false)
+const PICKER = 'statusbar-picker'
+
+// A pane, so Esc closes it (closeOnEscape); a band cannot hear Esc. In the fullscreen layout a pane docks beside the transcript
+async function togglePicker($: EngineInterface) {
+  const isOpen = (await $.ui.panes()).some(p => p.id === PICKER)
+  if (isOpen) return $.ui.close({ id: PICKER })
+  await $.ui.open({ id: PICKER, title: 'Model & effort', focus: true, closeOnEscape: true, rows: 3 })
+}
+
+const closePicker = ($: EngineInterface) => $.ui.close({ id: PICKER }).catch(() => undefined)
 
 const lines = (s: string) => s.split('\n').filter(Boolean).length
 
@@ -137,7 +146,7 @@ export const register: Register = on => {
         {rows(f).map((row, i) => (
           <Box key={`row${i}`}>
             {row.map(s => s.isPicker
-              ? <Button key="picker" plain label={s.text} onPress={() => void update($, isPickerOpen, open => !open)} />
+              ? <Button key="picker" plain label={s.text} onPress={() => void togglePicker($)} />
               : <Text color={s.color}>{s.text}</Text>)}
           </Box>
         ))}
@@ -146,24 +155,23 @@ export const register: Register = on => {
     )
   })
 
-  // The person sending a message closes it; the picker's own /model and /effort runs do not
+  // The person sending a message closes it; another plugin's prompt does not
   on('prompt.submit', async ($, e, next) => {
-    if (e.origin.kind !== 'plugin') await update($, isPickerOpen, () => false)
+    if (e.origin.kind !== 'plugin') await closePicker($)
     return next(e)
   })
 
   // A second way in, in case a click on ⚙ under the prompt does not reach the plugin
   on('command.run', { command: 'statusbar' }, async $ => {
-    await update($, isPickerOpen, open => !open)
+    await togglePicker($)
     return { text: '' }
   })
 
-  // The picker: a band above the prompt, so it stays a few rows tall in every layout (a pane docks full height)
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const [isOpen, f] = await Promise.all([read($, isPickerOpen), read($, figures)])
-    if (!isOpen || f === null || e.props.hasSurvey) return next(e)
-
+  on('ui.render', { component: 'Pane', requestId: PICKER }, async ($, e) => {
+    const f = await read($, figures)
     const { Box, Text, Button } = $.ui.resolve(e)
+    if (f === null) return <Text dimColor>Reading the session…</Text>
+
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply
     const run = (command: 'model' | 'effort', args: string) =>
       $.command.run({ command, args }).catch(err => void $.ui.toast(`statusbar: /${command} ${args} failed: ${String(err)}`))
@@ -191,13 +199,13 @@ export const register: Register = on => {
     )
 
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
+      <Box flexDirection="column" paddingX={1}>
         <Box>
           <Box width={8}><Text dimColor>MODEL</Text></Box>
           {MODELS.map(m => option(`model-${m.id}`, m.label,
             sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
           <Box flexGrow={1} />
-          <Button key="close" plain label="✕" onPress={() => void update($, isPickerOpen, () => false)} />
+          <Button key="close" plain label="✕" onPress={() => void closePicker($)} />
         </Box>
         <Box>
           <Box width={8}><Text dimColor>EFFORT</Text></Box>
