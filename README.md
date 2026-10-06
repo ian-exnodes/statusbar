@@ -89,8 +89,9 @@ Press `⚙` (or run `/statusbar`) to open a small box above the prompt:
 The current model and effort are highlighted. A model is set through `/config`'s Model setting, which switches
 at once and, like `/model`, also makes it your default for new sessions. When Claude Code needs to ask first (in a
 long conversation, where the new model reads the whole conversation again, or Fable's one-time consent), the picker
-runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort` and applies
-to this session only.
+runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort`: it applies to
+the session at once and also becomes that model's default effort for new sessions, as typing `/effort` does.
+Claude Code prints nothing for it in the transcript; the status bar shows the new level.
 The box closes on `✕` or when you send a message.
 
 ## When it updates

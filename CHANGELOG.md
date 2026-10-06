@@ -20,7 +20,7 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 - **Model and effort picker.** Press `⚙` (or run `/statusbar`) for a small box above the prompt to switch
   model and effort. A model switches at once through `/config`'s Model setting and also becomes your default
   for new sessions, as `/model` does; when Claude Code needs to ask first, it runs `/model` instead. An effort
-  runs `/effort`, for this session only. It closes on `✕` or when you send a message.
+  runs `/effort` and also becomes that model's default effort, as typing `/effort` does. It closes on `✕` or when you send a message.
 - The status bar redraws as soon as the model or effort changes, instead of at the next turn.
 
 ### Changed
