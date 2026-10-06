@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
+import { barColor, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
@@ -85,6 +85,14 @@ describe('statusbar rows', () => {
     expect(family('claude-opus-5-5[1m]')).toBe('opus')
     expect(family('claude-fable-5-1')).toBe('fable')
     expect(family('some-gateway-model')).toBeUndefined()
+  })
+
+  test("a session starts at the model's saved effort, else the global one", async () => {
+    const settings = { effortLevel: 'high', modelSettings: { 'claude-sonnet-5-5': { effortLevel: 'medium' } } }
+    expect(defaultEffort(settings, 'claude-sonnet-5-5')).toBe('medium')
+    expect(defaultEffort(settings, 'claude-opus-5-5')).toBe('high')
+    expect(defaultEffort({}, 'claude-opus-5-5')).toBeUndefined()
+    expect(defaultEffort({ modelSettings: { 'claude-opus-5-5': { effortLevel: 'auto' } }, effortLevel: 'low' }, 'claude-opus-5-5')).toBe('low')
   })
 
   test('effort colors rise with cost', async () => {

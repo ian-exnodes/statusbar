@@ -42,6 +42,13 @@ export const parseEffort = (value: unknown): StatusEffort | undefined => {
 
 export const sameModel = (a: string, b: string) => prettyModel(a) === prettyModel(b)
 
+type EffortSettings = { effortLevel?: unknown; modelSettings?: Record<string, { effortLevel?: unknown } | undefined> }
+
+// The level a session starts at: interactive /effort saves it per model (modelSettings), older settings keep one.
+// After the start, the session's level carries across a model switch, so this is read only until one is known
+export const defaultEffort = (settings: EffortSettings, model: string) =>
+  parseEffort(settings.modelSettings?.[model]?.effortLevel) ?? parseEffort(settings.effortLevel)
+
 // turn.step fires for subagents too, and an agent may run at its own effort: only the main loop's counts
 export const mainEffort = (step: { effort?: unknown; agentId?: string }) =>
   step.agentId === undefined ? parseEffort(step.effort) : undefined

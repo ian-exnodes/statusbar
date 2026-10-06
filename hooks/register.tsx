@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { EFFORTS, MODELS, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, quotas, rows, sameModel } from './format'
+import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -26,8 +26,8 @@ async function refresh($: EngineInterface) {
 
   await update($, figures, () => ({
     model,
-    // The last level /effort or a turn named, else the settings' default
-    effort: picked ?? parseEffort((settings as { effortLevel?: unknown }).effortLevel),
+    // The last level /effort, the picker or a turn named, else the level the session started at
+    effort: picked ?? defaultEffort(settings as Parameters<typeof defaultEffort>[0], model),
     dir,
     branch: isRepo ? branch.stdout.trim() : undefined,
     staged: isRepo ? lines(staged?.stdout ?? '') : 0,
@@ -115,7 +115,7 @@ export const register: Register = on => {
     return yield* next(e)
   })
 
-  // Typed or run from the picker: redraw right after, not at the next turn
+  // Typed /effort. The picker's own runs never reach this plugin's hooks (re-entry), so the picker records its pick itself
   on('command.run', { command: 'effort' }, async ($, e, next) => {
     const r = await next(e)
     const level = effortFromCommand(e.args, r.text ?? '')
@@ -166,13 +166,21 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply
     const run = (command: 'model' | 'effort', args: string) =>
-      void $.command.run({ command, args }).catch(err => $.ui.toast(`statusbar: /${command} ${args} failed: ${String(err)}`))
+      $.command.run({ command, args }).catch(err => void $.ui.toast(`statusbar: /${command} ${args} failed: ${String(err)}`))
+    // Claude Code prints nothing for a plugin's /effort and this plugin's /effort hook is skipped, so record it here
+    const pickEffort = async (level: string) => {
+      const r = await run('effort', level)
+      const applied = r && effortFromCommand(level, r.text ?? '')
+      if (!applied) return
+      await update($, effort, () => applied)
+      await update($, figures, now => now && { ...now, effort: applied })
+    }
     // /config's Model row switches in milliseconds; /model takes a second or two behind its own screen.
     // The row refuses what only a dialog may decide (the long-conversation confirm, Fable's consent): then /model asks
     const pickModel = async (id: string) => {
       const alias = family(id)
       const set = alias ? await $.config.set({ key: 'model', value: alias }).catch(() => undefined) : undefined
-      if (set?.deny !== undefined || set === undefined) return run('model', id)
+      if (set?.deny !== undefined || set === undefined) return void run('model', id)
       const model = await $.session.model()
       await update($, figures, now => now && { ...now, model })
     }
@@ -194,7 +202,7 @@ export const register: Register = on => {
         <Box>
           <Box width={8}><Text dimColor>EFFORT</Text></Box>
           {EFFORTS.map(level => option(`effort-${level}`, level.charAt(0).toUpperCase() + level.slice(1),
-            level === f.effort ? effortColor(level) : undefined, () => run('effort', level)))}
+            level === f.effort ? effortColor(level) : undefined, () => void pickEffort(level)))}
         </Box>
       </Box>
     )
