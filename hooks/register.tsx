@@ -3,7 +3,7 @@ import type { BuiltinToolResults, EngineInterface, Register, RenderInput, Resolv
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  finalsFromMessages, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
+  agentSpawned, finalsFromMessages, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -31,6 +31,8 @@ const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
 // Set when a turn ends in an error or refusal: Claude's rows show until the next request, so the reason is visible
 const showNotes = atom({ plugin: 'statusbar', key: 'showNotes' } as const, false)
+// The latest status of each helper agent on the card, read from $.agent.list() on the 1s tick
+const agentStatus = atom({ plugin: 'statusbar', key: 'agentStatus' } as const, {})
 
 // A row drawn as nothing: a ui.render hook that returns null fails and the engine draws the row anyway
 const empty = ($: EngineInterface, e: ResolveInput) => {
@@ -60,12 +62,16 @@ const endCleanTurn = async (
 
 // The Clean View card for the band above the prompt, or null while there is none to show
 const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
-  const [isOn, c, f] = await Promise.all([read($, cleanView), read($, checklist), read($, figures)])
+  const [isOn, c, f, statusById] = await Promise.all([read($, cleanView), read($, checklist), read($, figures), read($, agentStatus)])
   if (!isOn || c === null || e.props.hasSurvey) return null
 
   const { Box, Text } = $.ui.resolve(e)
   const accent = modelColor(f?.model ?? '')
-  const k = card(c, await $.clock.now(), accent)
+  const statuses = (c.agentIds ?? []).flatMap(id => statusById[id] ? [statusById[id]] : [])
+  const k = card(c, await $.clock.now(), accent, statuses)
+  const agentLine = k.agents && (
+    <Text color={k.agents.hasFailed ? 'red' : undefined} dimColor={!k.agents.hasFailed}>  ↳ {k.agents.text}</Text>
+  )
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1}>
@@ -77,12 +83,16 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
           <Text dimColor>{'░'.repeat(BAR_CELLS - k.filled)}</Text>
         </Box>
       )}
+      {k.agents?.afterRow === undefined && agentLine}
       {k.rows.map((row, i) => (
-        <Box key={`task${i}`}>
-          <Box flexGrow={1}>
-            <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.mark} {row.subject}</Text>
+        <Box key={`task${i}`} flexDirection="column">
+          <Box>
+            <Box flexGrow={1}>
+              <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.mark} {row.subject}</Text>
+            </Box>
+            <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
           </Box>
-          <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
+          {k.agents?.afterRow === i && agentLine}
         </Box>
       ))}
       {k.footer && <Text color={c.outcome === 'answer' ? 'green' : undefined} dimColor={c.outcome !== 'answer'}>{k.footer}</Text>}
@@ -155,6 +165,11 @@ async function tick($: EngineInterface) {
     ms: now - usage.startedAt,
     quotas: quotas(usage.rateLimits),
   })
+  const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
+  if (isOn && c?.agentIds?.length) {
+    const agents = await $.agent.list()
+    await update($, agentStatus, () => Object.fromEntries(agents.map(a => [a.id, a.status])))
+  }
 }
 
 export const register: Register = on => {
@@ -335,8 +350,21 @@ export const register: Register = on => {
         const now = await $.clock.now()
         await update($, checklist, () => startChecklist(e.text, now))
       }
+    } else {
+      // A continuation (background agents reported back): the same request goes on, so the card re-opens
+      await update($, checklist, c => c && c.endedAt !== undefined ? reopened(c) : c)
     }
     return next(e)
+  })
+
+  // Helper agents the main conversation starts join the card; agents started by agents are their parent's business
+  on('agent.spawn', async ($, e, next) => {
+    const r = await next(e)
+    const id = r.agentId
+    if (r.deny === undefined && id !== undefined && e.parentAgentId === undefined && (await read($, cleanView))) {
+      await update($, checklist, c => c && agentSpawned(c, id))
+    }
+    return r
   })
 
   // Claude's task calls build the card; a subagent's own tasks are not the person's request

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
+  agentSpawned, agentsSummary, reopened,
 } from './clean'
 
 const start = startChecklist('Build a weather dashboard for New York with live data and a shareable link', 0)
@@ -136,6 +137,41 @@ describe('clean view', () => {
       { role: 'assistant' as const, text: 'Sorted.' },
     ]
     expect(finalsFromMessages(history)).toEqual(['Both files have 3 lines.', 'Sorted.'])
+  })
+
+  test('agents are summed up: running, done, failed', async () => {
+    expect(agentsSummary([])).toBeUndefined()
+    expect(agentsSummary(['running'])?.text).toBe('1 agent: running')
+    expect(agentsSummary(['completed', 'idle', 'waiting'])?.text).toBe('3 agents: 2 done, 1 running')
+    expect(agentsSummary(['completed', 'completed'])?.text).toBe('2 agents: done')
+    const failed = agentsSummary(['completed', 'failed', 'killed', 'pending'])
+    expect(failed?.text).toBe('4 agents: 1 done, 1 running, 2 failed')
+    expect(failed?.hasFailed).toBe(true)
+    expect(failed?.running).toBe(1)
+  })
+
+  test('a spawned agent joins the card once', async () => {
+    const c = agentSpawned(agentSpawned(four, 'a1'), 'a1')
+    expect(agentSpawned(c, 'a2').agentIds).toEqual(['a1', 'a2'])
+  })
+
+  test('the agent line sits under the working task, or under the title without one', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const k = card(working, 0, 'blue', ['running', 'completed'])
+    expect(k.agents).toEqual({ text: '2 agents: 1 done, 1 running', hasFailed: false, afterRow: 1 })
+    expect(card(start, 0, 'blue', ['running']).agents?.afterRow).toBeUndefined()
+    expect(card(four, 0, 'blue').agents).toBeUndefined()
+  })
+
+  test('a card closed while agents still run says so; a continuation re-opens it', async () => {
+    const all = four.tasks.reduce((c, t) => taskUpdated(c, { taskId: t.id, status: 'completed' }), four)
+    const closed = turnEnded(all, 192_000, 'answer')
+    expect(card(closed, 0, 'blue', ['running', 'completed']).footer).toBe('✓ 4 of 4 done · 3m · 1 agent still running')
+    expect(card(closed, 0, 'blue', ['completed']).footer).toBe('✓ 4 of 4 done · 3m')
+    const open = reopened(closed)
+    expect(open.endedAt).toBeUndefined()
+    expect(open.outcome).toBeUndefined()
+    expect(card(open, 200_000, 'blue').footer).toBeUndefined()
   })
 
   test('only the last 50 final answers are kept', async () => {

@@ -16,6 +16,8 @@ export type CleanChecklist = {
   /** Set when the turn completes. */
   endedAt?: number
   outcome?: 'answer' | 'stopped'
+  /** Helper agents the main conversation started for this request. */
+  agentIds?: string[]
 }
 
 export type StatusFigures = {
@@ -52,6 +54,7 @@ declare module 'claude-code' {
       checklist: CleanChecklist | null
       finals: string[]
       showNotes: boolean
+      agentStatus: Record<string, string>
     }
   }
 }
