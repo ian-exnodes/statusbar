@@ -1,18 +1,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { quotas, rows } from './format'
+import { parseEffort, quotas, rows } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
 const lastTurnTokens = atom({ plugin: 'statusbar', key: 'lastTurnTokens' } as const, null)
 const turnDelta = atom({ plugin: 'statusbar', key: 'turnDelta' } as const, null)
+const effort = atom({ plugin: 'statusbar', key: 'effort' } as const, null)
 
 const lines = (s: string) => s.split('\n').filter(Boolean).length
 
 async function refresh($: EngineInterface) {
-  const [model, dir, usage, now, out, delta] = await Promise.all([
+  const [model, dir, usage, now, out, delta, picked, settings] = await Promise.all([
     $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, turnDelta),
+    read($, effort), $.settings.read(),
   ])
   const [branch, staged, modified] = await Promise.all([
     $.process.run(['git', 'branch', '--show-current']).catch(() => undefined),
@@ -23,6 +25,8 @@ async function refresh($: EngineInterface) {
 
   await update($, figures, () => ({
     model,
+    // The last level /effort or a turn named, else the settings' default
+    effort: picked ?? parseEffort((settings as { effortLevel?: unknown }).effortLevel),
     dir,
     branch: isRepo ? branch.stdout.trim() : undefined,
     staged: isRepo ? lines(staged?.stdout ?? '') : 0,
@@ -92,6 +96,31 @@ export const register: Register = on => {
     await update($, tokensOut, n => n + (e.usage?.output_tokens ?? 0))
     const r = await next(e)
     await recordTurn($)
+    await refresh($)
+    return r
+  })
+
+  // The level each request actually carries, after any downgrade for the model
+  on('turn.step', async function* ($, e, next) {
+    const level = parseEffort(e.effort)
+    if (level) {
+      await update($, effort, () => level)
+      await update($, figures, f => f && { ...f, effort: level })
+    }
+    return yield* next(e)
+  })
+
+  // Typed or run from the picker: redraw right after, not at the next turn
+  on('command.run', { command: 'effort' }, async ($, e, next) => {
+    const r = await next(e)
+    const level = parseEffort(e.args)
+    if (level) await update($, effort, () => level)
+    await refresh($)
+    return r
+  })
+
+  on('command.run', { command: 'model' }, async ($, e, next) => {
+    const r = await next(e)
     await refresh($)
     return r
   })
