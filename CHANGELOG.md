@@ -18,8 +18,9 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 - **Effort on row 1**, next to the model: `[Opus 5.5] high ⚙`. Colored by cost: low gray, medium cyan,
   high yellow, xhigh orange, max red. Hidden until the session's effort is known.
 - **Model and effort picker.** Press `⚙` (or run `/statusbar`) for a small box above the prompt to switch
-  model and effort for this session. It closes on `✕` or when you send a message.
-- The status bar redraws right after `/model` or `/effort`, typed or picked, instead of at the next turn.
+  model and effort. It runs `/model` or `/effort` for you, so a picked model also becomes your default for
+  new sessions, as typing `/model` does. It closes on `✕` or when you send a message.
+- The status bar redraws as soon as the model or effort changes, instead of at the next turn.
 
 ### Changed
 

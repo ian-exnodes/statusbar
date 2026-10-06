@@ -121,9 +121,11 @@ export const register: Register = on => {
     return r
   })
 
-  on('command.run', { command: 'model' }, async ($, e, next) => {
+  // Once a model switch has landed, whoever made it (/model typed or picked, /config, a fallback).
+  // Not command.run: an interactive /model resolves before its switch lands, so a refresh there reads the old model
+  on('classic.PostModelSwitch', async ($, e, next) => {
     const r = await next(e)
-    await refresh($)
+    await update($, figures, f => f && { ...f, model: e.to_model })
     return r
   })
 

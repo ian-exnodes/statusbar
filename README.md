@@ -86,8 +86,9 @@ Press `⚙` (or run `/statusbar`) to open a small box above the prompt:
     MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
 
-The current model and effort are highlighted. Picking one runs `/model` or `/effort` for you, for this
-session only. In a long conversation, switching model or effort can show Claude Code's own confirmation,
+The current model and effort are highlighted. Picking one runs `/model` or `/effort` for you, exactly as if
+you typed it: a model you pick also becomes your default for new sessions (Claude Code says so), an effort
+applies to this session only. In a long conversation, switching model or effort can show Claude Code's own confirmation,
 because the change makes the model read the whole conversation again; if you cancel, nothing changes.
 The box closes on `✕` or when you send a message.
 
