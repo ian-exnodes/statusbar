@@ -29,7 +29,7 @@ describe('statusbar rows', () => {
   test('two rows with the statusline.sh text and colors', async () => {
     const [top = [], bottom = []] = rows(base)
     expect(plain(top)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2')
-    expect(plain(bottom)).toBe('███░░░░░░░ 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m 5s')
+    expect(plain(bottom)).toBe('Context █░░░░ 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m')
     expect(colorOf(top, 'Opus')).toBe('magenta')
     expect(colorOf(top, '+1')).toBe('green')
     expect(colorOf(top, '~2')).toBe('yellow')
@@ -59,9 +59,17 @@ describe('statusbar rows', () => {
     expect(quotas([{ kind: 'five_hour', percentUsed: 104 }])).toEqual([{ label: '5h', remaining: 0 }])
 
     const [, bottom = []] = rows({ ...base, quotas: [{ label: '5h', remaining: 76 }, { label: '7d', remaining: 8 }] })
-    expect(plain(bottom)).toBe('███░░░░░░░ 37% | 5h ███████░░░ 76% | 7d ░░░░░░░░░░ 8% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m 5s')
-    expect(colorOf(bottom, '███████░░░')).toBe('green')
-    expect(colorOf(bottom, '░░░░░░░░░░')).toBe('red')
+    expect(plain(bottom)).toBe('Context █░░░░ 37% | Limit 5h ███░░ 76% | Limit 7d ░░░░░ 8% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m')
+    expect(colorOf(bottom, '███░░')).toBe('green')
+    expect(colorOf(bottom, '░░░░░')).toBe('red')
+  })
+
+  test('session time shows hours and minutes, no seconds', async () => {
+    const at = (ms: number) => plain(rows({ ...base, ms })[1] ?? [])
+    expect(at(59 * 60_000 + 59_000)).toContain('⏱️ 59m')
+    expect(at(59 * 60_000 + 59_000)).not.toContain('59s')
+    expect(at(3 * 3_600_000 + 19 * 60_000 + 41_000)).toContain('⏱️ 3h 19m')
+    expect(at(3_600_000)).toContain('⏱️ 1h 0m')
   })
 
   test('no git segment outside a repo', async () => {
