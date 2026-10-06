@@ -105,8 +105,8 @@ status bar redraws right after either.
 ## Changes after the live check
 
 - The button reads `⚙ Command`.
-- The picker is a pane (`$.ui.open` with `closeOnEscape`), not a band: the person wanted Esc to close it, and a band
-  never hears Esc. In the fullscreen layout it docks beside the transcript; the person chose that over no Esc.
+- The picker was briefly a pane (`closeOnEscape`) so Esc could close it; in the fullscreen layout that docks full
+  height beside the transcript, and the person chose the small band back, without Esc.
 - A model is set through `/config`'s Model row (`$.config.set`), falling back to `/model` when the row refuses.
 - The model is read every second: no event reaches a user-tier plugin when it changes.
 - The picker records its own effort pick: a plugin's own `$.command.run` skips its own hooks.

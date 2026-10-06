@@ -81,7 +81,7 @@ The 5h and 7d bars appear only on a Claude subscription, once Claude Code has re
 
 ### Picker
 
-Press `⚙ Command` (or run `/statusbar`) to open the picker:
+Press `⚙ Command` (or run `/statusbar`) to open a small box above the prompt:
 
     MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
@@ -92,7 +92,7 @@ long conversation, where the new model reads the whole conversation again, or Fa
 runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort`: it applies to
 the session at once and also becomes that model's default effort for new sessions, as typing `/effort` does.
 Claude Code prints nothing for it in the transcript; the status bar shows the new level.
-It closes on Esc, `✕`, pressing `⚙ Command` again, or when you send a message. In the fullscreen layout it opens as a panel beside the transcript.
+It closes on `✕`, pressing `⚙ Command` again, `/statusbar`, or when you send a message. Esc does not close it: Claude Code does not pass Esc to a plugin's box above the prompt.
 
 ## When it updates
 

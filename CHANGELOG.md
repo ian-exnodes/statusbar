@@ -11,16 +11,24 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.7.1 (2026-10-06)
+
+### Fixed
+
+- The picker is the small box above the prompt again. In 0.7.0 it opened as a full-height panel beside the
+  transcript in the fullscreen layout. It closes on `✕`, the button again, `/statusbar`, or sending a message;
+  Esc does not close it.
+
 ## 0.7.0 (2026-10-06)
 
 ### Added
 
 - **Effort on row 1**, next to the model: `[Opus 5.5] high ⚙ Command`. Colored by cost: low gray, medium cyan,
   high yellow, xhigh orange, max red. Hidden until the session's effort is known.
-- **Model and effort picker.** Press `⚙ Command` (or run `/statusbar`) for a picker to switch
+- **Model and effort picker.** Press `⚙ Command` (or run `/statusbar`) for a small box above the prompt to switch
   model and effort. A model switches at once through `/config`'s Model setting and also becomes your default
   for new sessions, as `/model` does; when Claude Code needs to ask first, it runs `/model` instead. An effort
-  runs `/effort` and also becomes that model's default effort, as typing `/effort` does. It closes on Esc, `✕`, or when you send a message.
+  runs `/effort` and also becomes that model's default effort, as typing `/effort` does. It closes on `✕`, the button again, or when you send a message.
 - The status bar redraws as soon as the model or effort changes, instead of at the next turn.
 
 ### Changed
