@@ -1,0 +1,6 @@
+{
+  "name": "ian-exnodes",
+  "description": "ian-exnodes Claude Code plugins: statusbar, a live two-row status line under the prompt",
+  "owner": { "name": "ian-exnodes" },
+  "plugins": [{ "name": "statusbar", "source": "./" }]
+}
