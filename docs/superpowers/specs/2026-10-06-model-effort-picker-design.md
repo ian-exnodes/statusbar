@@ -25,7 +25,8 @@ Row 1 after:
   Any other model (a gateway id) stays `cyan`, as today.
 - `high` is the effort level, colored on a scale that rises with cost: `low` gray (`subtle`), `medium`
   `cyan`, `high` `yellow`, `xhigh` orange (`#ff8700`), `max` `red`. Hidden when the effort is not known.
-- `⚙` is a button. Pressing it (click, or Enter once the plugin has focus) opens the picker.
+- `⚙` is a button. Clicking it opens or closes the picker. `/statusbar` does the same, in case a click
+  under the prompt does not reach the plugin.
 
 Row 2 is unchanged.
 
@@ -47,11 +48,11 @@ stays a few rows tall in every layout.
 - Every option is a `plain` Button; hover inverts it.
 - Picking a model runs `$.command.run({ command: 'model', args: <model id> })`; picking an effort runs
   `{ command: 'effort', args: <level> }`. Same as the person typing them, so Claude Code's own checks
-  apply. In a long conversation, a model switch shows Claude Code's confirm dialog (the new model
-  re-reads the conversation); cancelling it prints "Kept model as …" and nothing changes. That is
+  apply. In a long conversation, a model or effort change can show Claude Code's confirm dialog (the
+  model re-reads the conversation); cancelling it prints "Kept model as …" and nothing changes. That is
   expected and the picker does not bypass it.
 - The picker stays open after a pick, so model and effort can both be set. It closes on `✕` or when the
-  person submits a prompt (`prompt.submit`).
+  person submits a prompt (`prompt.submit` whose origin is not a plugin).
 - Esc does not close it (a band cannot; Esc only returns the keys to the prompt).
 
 The model list is fixed in code: Haiku 4.5, Sonnet 5.5, Opus 5.5, Fable 5.1 (`claude-haiku-4-5-20251001`,
