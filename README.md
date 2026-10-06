@@ -94,6 +94,25 @@ the session at once and also becomes that model's default effort for new session
 Claude Code prints nothing for it in the transcript; the status bar shows the new level.
 It closes on `✕`, pressing `⚙ Command` again, `/statusbar`, or when you send a message. Esc does not close it: Claude Code does not pass Esc to a plugin's box above the prompt.
 
+### Clean View
+
+Turn it on in the picker (`CLEAN VIEW  Off  On`); it stays on across sessions until you turn it off, and row 1
+shows `◐ Clean`. Claude's tool calls, their results, code changes and its in-between notes are hidden; you see your
+request, a checklist card above the prompt, and Claude's final answer:
+
+    ╭──────────────────────────────────────────────────╮
+    │ ✧ Build a weather dashboard for New York…        │
+    │ Step 2 of 4   ▓▓▓▓▓░░░░░░░░░░░░░░░               │
+    │ ✓ Pick the page style and layout          Done   │
+    │ ● Check how the page gets live weather Working   │
+    │ ○ Build the weather dashboard             Next   │
+    │ ○ Publish it and share the link        Up next   │
+    ╰──────────────────────────────────────────────────╯
+
+While it is on, Claude is asked to break each request into a few tasks first, so the card has a list. When Claude
+finishes, the card reads `✓ 4 of 4 done · 3m` until your next request. Permission prompts, Claude's questions to you,
+and Claude Code's notices are never hidden. Nothing is deleted: turn Clean View off and every hidden row shows again.
+
 ## When it updates
 
 - Every second: context %, quotas, `↑`, `$`, the timer, and the model.
@@ -106,7 +125,7 @@ If you already have a `statusLine` command in `~/.claude/settings.json`, it keep
 
 ## What it runs
 
-Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would.
+Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would. With Clean View on, it adds one short instruction to Claude's system prompt asking it to plan each request as tasks.
 
 ## Develop
 

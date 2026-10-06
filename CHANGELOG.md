@@ -11,6 +11,15 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.8.0 (2026-10-06)
+
+### Added
+
+- **Clean View**, a toggle in the Command picker. It hides Claude's tool calls, results, code changes and in-between
+  notes, and shows a live checklist card above the prompt (`Step 2 of 4`, each task Done / Working / Next / Up next)
+  with Claude's final answer in the transcript. It stays on across sessions; row 1 shows `◐ Clean`. While on, Claude
+  is asked to plan each request as tasks. Turn it off and every hidden row shows again.
+
 ## 0.7.2 (2026-10-06)
 
 ### Changed
