@@ -41,6 +41,8 @@ claude plugin marketplace update ian-exnodes
 claude plugin update statusbar@ian-exnodes
 ```
 
+What changed in each version: [CHANGELOG.md](CHANGELOG.md). To be notified of new versions, **Watch → Custom → Releases** on this repo.
+
 ### Uninstall
 
 ```bash
