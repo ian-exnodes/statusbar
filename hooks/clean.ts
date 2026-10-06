@@ -89,7 +89,8 @@ export const CHECKLIST_TOOL = 'mcp__statusbar__checklist'
 export const CLEAN_VIEW_NOTE = 'The person is using Clean View: they see a checklist of your steps, not your tool calls. '
   + `Before working on a request, call ${CHECKLIST_TOOL} with a few short tasks (subject: a plain-language step, `
   + 'under 50 characters; status pending, in_progress or completed). Call it again, with the whole list, whenever a '
-  + 'task starts or finishes. For a quick question, one task is enough. If the tool is not loaded yet, load it first '
+  + 'task starts or finishes. Mark the last task completed before writing your final answer, and call no tools after '
+  + 'it. For a quick question, one task is enough. If the tool is not loaded yet, load it first '
   + `with ToolSearch, query "select:${CHECKLIST_TOOL}".`
 
 export const withCleanViewNote = (context: readonly string[] | undefined) =>
@@ -107,6 +108,33 @@ export const toolChecklist = (c: CleanChecklist, input: unknown): CleanChecklist
       ? [{ content: subject, status: status as CleanTaskStatus }] : []
   })
   return todosWritten(c, valid)
+}
+
+// A subagent's turn is not the person's request: it neither closes the card nor counts as a final answer
+export const turnOutcome = (e: { reason: string; isAborted: boolean; agentId?: string }) =>
+  e.agentId !== undefined ? undefined : e.reason === 'answer' && !e.isAborted ? 'answer' as const : 'stopped' as const
+
+// After an error or refusal the person needs to see why Claude stopped; Esc is their own choice
+export const revealsNotes = (e: { reason: string }) => e.reason === 'error' || e.reason === 'refusal'
+
+// A continuation turn ("" text) belongs to the request already on the card
+export const startsCard = (text: string) => text.trim().length > 0
+
+type HistoryMessage = { role: 'user' | 'assistant'; text: string; toolResults?: readonly unknown[] }
+
+// A resumed session's final answers: the last assistant text before each prompt the person typed
+export const finalsFromMessages = (messages: readonly HistoryMessage[]) => {
+  const finals: string[] = []
+  let last: string | undefined
+  for (const m of messages) {
+    const isPrompt = m.role === 'user' && !m.toolResults?.length && m.text.trim() !== ''
+    if (isPrompt) {
+      if (last !== undefined) finals.push(last)
+      last = undefined
+    } else if (m.role === 'assistant' && m.text.trim() !== '') last = m.text
+  }
+  if (last !== undefined) finals.push(last)
+  return finals.slice(-FINALS_KEPT)
 }
 
 export const addFinal = (finals: readonly string[], answer: string) => [...finals, answer].slice(-FINALS_KEPT)

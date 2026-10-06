@@ -2,6 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import {
   CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
+  finalsFromMessages, revealsNotes, startsCard, turnOutcome,
 } from './clean'
 
 const start = startChecklist('Build a weather dashboard for New York with live data and a shareable link', 0)
@@ -85,6 +86,7 @@ describe('clean view', () => {
     expect(withCleanViewNote([CLEAN_VIEW_NOTE])).toEqual([CLEAN_VIEW_NOTE])
     expect(CLEAN_VIEW_NOTE).toContain('mcp__statusbar__checklist')
     expect(CLEAN_VIEW_NOTE).toContain('select:mcp__statusbar__checklist')
+    expect(CLEAN_VIEW_NOTE).toContain('before writing your final answer')
   })
 
   test("the plugin's checklist tool replaces the list, skipping malformed entries", async () => {
@@ -101,6 +103,39 @@ describe('clean view', () => {
       { id: 'todo-2', subject: 'Report the counts', status: 'pending' },
     ])
     expect(toolChecklist(four, 'nonsense')).toEqual(four)
+  })
+
+  test("only the main conversation's turn closes the card", async () => {
+    expect(turnOutcome({ reason: 'answer', isAborted: false })).toBe('answer')
+    expect(turnOutcome({ reason: 'aborted', isAborted: true })).toBe('stopped')
+    expect(turnOutcome({ reason: 'error', isAborted: false })).toBe('stopped')
+    expect(turnOutcome({ reason: 'answer', isAborted: false, agentId: 'agent-7' })).toBeUndefined()
+  })
+
+  test('an error or refusal reveals what Claude wrote; an answer or Esc does not', async () => {
+    expect(revealsNotes({ reason: 'error' })).toBe(true)
+    expect(revealsNotes({ reason: 'refusal' })).toBe(true)
+    expect(revealsNotes({ reason: 'answer' })).toBe(false)
+    expect(revealsNotes({ reason: 'aborted' })).toBe(false)
+  })
+
+  test('a continuation turn with no typed text keeps the card', async () => {
+    expect(startsCard('Build the page')).toBe(true)
+    expect(startsCard('   ')).toBe(false)
+  })
+
+  test("a resumed session's final answers come from its history", async () => {
+    const history = [
+      { role: 'user' as const, text: 'Count the lines' },
+      { role: 'assistant' as const, text: 'Let me check.' },
+      { role: 'user' as const, text: '', toolResults: [{}] },
+      { role: 'assistant' as const, text: 'Both files have 3 lines.' },
+      { role: 'user' as const, text: 'Thanks, now sort them' },
+      { role: 'assistant' as const, text: '' },
+      { role: 'user' as const, text: '', toolResults: [{}] },
+      { role: 'assistant' as const, text: 'Sorted.' },
+    ]
+    expect(finalsFromMessages(history)).toEqual(['Both files have 3 lines.', 'Sorted.'])
   })
 
   test('only the last 50 final answers are kept', async () => {

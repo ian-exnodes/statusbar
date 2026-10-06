@@ -125,7 +125,12 @@ If you already have a `statusLine` command in `~/.claude/settings.json`, it keep
 
 ## What it runs
 
-Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would. With Clean View on, it attaches a short note to each of your prompts, which only Claude reads, asking it to plan the request as a checklist; and it gives Claude one tool, `mcp__statusbar__checklist`, to send that checklist to the card.
+Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls.
+
+- **What it writes:** your Clean View on/off choice, in the plugin's own store under your Claude Code configuration folder. Nothing else.
+- **The picker:** when you pick, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would.
+- **A tool for Claude:** every session gets one tool from this plugin, `mcp__statusbar__checklist`, which Claude uses to send its plan to the Clean View card. It only reads the list it is given.
+- **With Clean View on:** it attaches a short note to each of your prompts, which only Claude reads, asking it to plan the request with that tool.
 
 ## Develop
 

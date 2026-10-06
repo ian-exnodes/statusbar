@@ -3,7 +3,7 @@ import type { BuiltinToolResults, EngineInterface, Register, RenderInput, Resolv
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  toolChecklist, withCleanViewNote,
+  finalsFromMessages, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -29,6 +29,8 @@ const setCleanView = async ($: EngineInterface, isOn: boolean) => {
 }
 const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
+// Set when a turn ends in an error or refusal: Claude's rows show until the next request, so the reason is visible
+const showNotes = atom({ plugin: 'statusbar', key: 'showNotes' } as const, false)
 
 // A row drawn as nothing: a ui.render hook that returns null fails and the engine draws the row anyway
 const empty = ($: EngineInterface, e: ResolveInput) => {
@@ -37,15 +39,22 @@ const empty = ($: EngineInterface, e: ResolveInput) => {
 }
 
 const loadCleanView = async ($: EngineInterface) => {
-  const stored = await $.store.get('cleanView')
+  const [stored, history] = await Promise.all([$.store.get('cleanView'), $.session.messages()])
   await update($, cleanView, () => stored === true)
+  // A resumed session's earlier answers stay visible: they come back from the transcript, not this process's state
+  await update($, finals, list => list.length ? list : finalsFromMessages(history))
 }
 
-const endCleanTurn = async ($: EngineInterface, e: { answer: string; reason: string; isAborted: boolean }) => {
+const endCleanTurn = async (
+  $: EngineInterface,
+  e: { answer: string; reason: string; isAborted: boolean; agentId?: string },
+) => {
+  const outcome = turnOutcome(e)
+  if (outcome === undefined) return
   await update($, finals, list => addFinal(list, e.answer))
+  if (revealsNotes(e)) await update($, showNotes, () => true)
   if (!(await read($, cleanView))) return
   const now = await $.clock.now()
-  const outcome = e.reason === 'answer' && !e.isAborted ? 'answer' : 'stopped'
   await update($, checklist, c => c && c.endedAt === undefined ? turnEnded(c, now, outcome) : c)
 }
 
@@ -320,9 +329,12 @@ export const register: Register = on => {
   // Clean View
 
   on('turn.start', async ($, e, next) => {
-    if (await read($, cleanView)) {
-      const now = await $.clock.now()
-      await update($, checklist, () => startChecklist(e.text, now))
+    if (startsCard(e.text)) {
+      await update($, showNotes, () => false)
+      if (await read($, cleanView)) {
+        const now = await $.clock.now()
+        await update($, checklist, () => startChecklist(e.text, now))
+      }
     }
     return next(e)
   })
@@ -370,8 +382,8 @@ export const register: Register = on => {
   on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    const [isOn, list] = await Promise.all([read($, cleanView), read($, finals)])
-    if (!isOn || isFinalAnswer(e.props.text, list)) return next(e)
+    const [isOn, list, isRevealed] = await Promise.all([read($, cleanView), read($, finals), read($, showNotes)])
+    if (!isOn || isRevealed || isFinalAnswer(e.props.text, list)) return next(e)
     return empty($, e)
   })
 }

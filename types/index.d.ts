@@ -51,6 +51,7 @@ declare module 'claude-code' {
       cleanView: boolean
       checklist: CleanChecklist | null
       finals: string[]
+      showNotes: boolean
     }
   }
 }
