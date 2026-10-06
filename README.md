@@ -3,7 +3,7 @@
 A Claude Code plugin (a "mod") that draws a colored, live status line under the prompt input:
 
 ```
-[Opus 5.5] high ⚙ Command 📁 main-2 | 🌿 main +1~2
+[Opus 5.5] high ⚙ Command | 📁 main-2 | 🌿 main +1~2
 ██░░░░░░░░ 21% | 5h ███████░░░ 76% | 7d █████████░ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m 47s | ▲ +21.4k last turn
 ```
 

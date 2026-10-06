@@ -97,7 +97,7 @@ export const rows = (f: StatusFigures): Segment[][] => {
       ...(f.effort ? [{ text: ` ${f.effort}`, color: effortColor(f.effort) }] : []),
       { text: ' ' },
       { text: '⚙ Command', isPicker: true },
-      { text: ` 📁 ${f.dir.split('/').pop()}` },
+      { text: ` | 📁 ${f.dir.split('/').pop()}` },
       ...git,
     ],
     [

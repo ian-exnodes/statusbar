@@ -18,7 +18,7 @@ Row 1 today:
 Row 1 after:
 
 ```
-[Opus 5.5] high ⚙ Command 📁 statusbar | 🌿 main +1~2
+[Opus 5.5] high ⚙ Command | 📁 statusbar | 🌿 main +1~2
 ```
 
 - `[Opus 5.5]` is colored by model family: Opus `magenta`, Sonnet `blue`, Haiku `green`, Fable `yellow`.
