@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { EFFORTS, MODELS, effortColor, effortFromCommand, mainEffort, modelColor, parseEffort, quotas, rows, sameModel } from './format'
+import { EFFORTS, MODELS, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, quotas, rows, sameModel } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -167,6 +167,15 @@ export const register: Register = on => {
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply
     const run = (command: 'model' | 'effort', args: string) =>
       void $.command.run({ command, args }).catch(err => $.ui.toast(`statusbar: /${command} ${args} failed: ${String(err)}`))
+    // /config's Model row switches in milliseconds; /model takes a second or two behind its own screen.
+    // The row refuses what only a dialog may decide (the long-conversation confirm, Fable's consent): then /model asks
+    const pickModel = async (id: string) => {
+      const alias = family(id)
+      const set = alias ? await $.config.set({ key: 'model', value: alias }).catch(() => undefined) : undefined
+      if (set?.deny !== undefined || set === undefined) return run('model', id)
+      const model = await $.session.model()
+      await update($, figures, now => now && { ...now, model })
+    }
     const option = (key: string, label: string, fill: string | undefined, onPress: () => void) => (
       <Box key={key} backgroundColor={fill} paddingX={1}>
         <Button key={key} plain label={label} hover={{ inverse: true }} onPress={onPress} />
@@ -178,7 +187,7 @@ export const register: Register = on => {
         <Box>
           <Box width={8}><Text dimColor>MODEL</Text></Box>
           {MODELS.map(m => option(`model-${m.id}`, m.label,
-            sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => run('model', m.id)))}
+            sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
           <Box flexGrow={1} />
           <Button key="close" plain label="✕" onPress={() => void update($, isPickerOpen, () => false)} />
         </Box>

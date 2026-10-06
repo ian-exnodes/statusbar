@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, effortColor, effortFromCommand, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
+import { barColor, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
@@ -77,6 +77,14 @@ describe('statusbar rows', () => {
     expect(modelColor('claude-fable-5-1')).toBe('yellow')
     expect(modelColor('us.anthropic.claude-opus-5-5-v1')).toBe('magenta')
     expect(modelColor('some-gateway-model')).toBe('cyan')
+  })
+
+  test("a model's family is the alias /config's Model row takes", async () => {
+    expect(family('claude-haiku-4-5-20251001')).toBe('haiku')
+    expect(family('claude-sonnet-5-5')).toBe('sonnet')
+    expect(family('claude-opus-5-5[1m]')).toBe('opus')
+    expect(family('claude-fable-5-1')).toBe('fable')
+    expect(family('some-gateway-model')).toBeUndefined()
   })
 
   test('effort colors rise with cost', async () => {

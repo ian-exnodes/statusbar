@@ -46,7 +46,9 @@ stays a few rows tall in every layout.
 - The current model is filled with the model's color, the current effort with its level's color (the
   same scale as row 1). The border takes the model's color.
 - Every option is a `plain` Button; hover inverts it.
-- Picking a model runs `$.command.run({ command: 'model', args: <model id> })`; picking an effort runs
+- Picking a model sets `/config`'s Model row (`$.config.set({ key: 'model', value: <family alias> })`), which
+  switches in milliseconds; when the row refuses (a choice only a dialog may make: the long-conversation
+  confirm, Fable's consent), it runs `$.command.run({ command: 'model', args: <model id> })`. Picking an effort runs
   `{ command: 'effort', args: <level> }`. Same as the person typing them, so Claude Code's own checks
   apply. In a long conversation, a model or effort change can show Claude Code's confirm dialog (the
   model re-reads the conversation); cancelling it prints "Kept model as …" and nothing changes. That is

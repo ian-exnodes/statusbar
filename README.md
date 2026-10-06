@@ -86,10 +86,11 @@ Press `⚙` (or run `/statusbar`) to open a small box above the prompt:
     MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
 
-The current model and effort are highlighted. Picking one runs `/model` or `/effort` for you, exactly as if
-you typed it: a model you pick also becomes your default for new sessions (Claude Code says so), an effort
-applies to this session only. In a long conversation, switching model or effort can show Claude Code's own confirmation,
-because the change makes the model read the whole conversation again; if you cancel, nothing changes.
+The current model and effort are highlighted. A model is set through `/config`'s Model setting, which switches
+at once and, like `/model`, also makes it your default for new sessions. When Claude Code needs to ask first (in a
+long conversation, where the new model reads the whole conversation again, or Fable's one-time consent), the picker
+runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort` and applies
+to this session only.
 The box closes on `✕` or when you send a message.
 
 ## When it updates
@@ -104,7 +105,7 @@ If you already have a `statusLine` command in `~/.claude/settings.json`, it keep
 
 ## What it runs
 
-Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it runs `/model` or `/effort`, as if you typed them.
+Read-only git commands in the session's folder (`git branch --show-current`, `git diff --numstat`, `git diff --cached --numstat`). It makes no network calls and writes no files. When you pick in the picker, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would.
 
 ## Develop
 

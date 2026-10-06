@@ -22,8 +22,11 @@ export const MODELS = [
 
 const FAMILY_COLORS: Record<string, string> = { opus: 'magenta', sonnet: 'blue', haiku: 'green', fable: 'yellow' }
 
-// Not anchored, so a Bedrock or Vertex id (us.anthropic.claude-opus-…) still finds its family
-export const modelColor = (id: string) => FAMILY_COLORS[/claude-([a-z]+)-\d/.exec(id)?.[1] ?? ''] ?? 'cyan'
+// opus, sonnet…: also the alias /config's Model row takes. Not anchored, so a Bedrock or Vertex id
+// (us.anthropic.claude-opus-…) still finds its family
+export const family = (id: string) => /claude-([a-z]+)-\d/.exec(id)?.[1]
+
+export const modelColor = (id: string) => FAMILY_COLORS[family(id) ?? ''] ?? 'cyan'
 
 const EFFORT_COLORS: Record<StatusEffort, string> = {
   low: 'subtle', medium: 'cyan', high: 'yellow', xhigh: '#ff8700', max: 'red',
