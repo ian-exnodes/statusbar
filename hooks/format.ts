@@ -70,9 +70,15 @@ export const barColor = (percent: number) =>
 export const quotaColor = (remaining: number) =>
   remaining <= 10 ? 'red' : remaining <= 30 ? 'yellow' : 'green'
 
+// 5 blocks of 20% each, so row 2 stays short; the % beside it is the exact figure
 const bar = (percent: number) => {
-  const filled = Math.max(0, Math.min(10, Math.floor(percent / 10)))
-  return '█'.repeat(filled) + '░'.repeat(10 - filled)
+  const filled = Math.max(0, Math.min(5, Math.floor(percent / 20)))
+  return '█'.repeat(filled) + '░'.repeat(5 - filled)
+}
+
+const duration = (ms: number) => {
+  const mins = Math.floor(ms / 60_000)
+  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
 const LABELS: Record<string, string> = { five_hour: '5h', seven_day: '7d' }
@@ -84,7 +90,6 @@ export const quotas = (limits: readonly { kind: string; percentUsed: number }[])
   })
 
 export const rows = (f: StatusFigures): Segment[][] => {
-  const secs = Math.floor(f.ms / 1000)
   const git: Segment[] = f.branch === undefined ? [] : [
     { text: ` | 🌿 ${f.branch} ` },
     ...(f.staged ? [{ text: `+${f.staged}`, color: 'green' }] : []),
@@ -101,10 +106,11 @@ export const rows = (f: StatusFigures): Segment[][] => {
       ...git,
     ],
     [
+      { text: 'Context ' },
       { text: bar(f.percent), color: barColor(f.percent) },
       { text: ` ${f.percent}% | ` },
       ...f.quotas.flatMap(q => [
-        { text: `${q.label} ` },
+        { text: `Limit ${q.label} ` },
         { text: bar(q.remaining), color: quotaColor(q.remaining) },
         { text: ` ${q.remaining}% | ` },
       ]),
@@ -113,7 +119,7 @@ export const rows = (f: StatusFigures): Segment[][] => {
       { text: `↓ ${tokens(f.tokensOut)}`, color: 'yellow' },
       { text: ' | ' },
       { text: `$${f.usd.toFixed(2)}`, color: 'magenta' },
-      { text: ` | ⏱️ ${Math.floor(secs / 60)}m ${secs % 60}s` },
+      { text: ` | ⏱️ ${duration(f.ms)}` },
       ...(f.turnDelta === undefined ? [] : [{ text: ' | ' }, { text: turnDelta(f.turnDelta), color: 'subtle' }]),
     ],
   ]

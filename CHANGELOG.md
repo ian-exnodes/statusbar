@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.7.2 (2026-10-06)
+
+### Changed
+
+- Row 2 is labeled and shorter: `Context █░░░░ 21% | Limit 5h ███░░ 76% | Limit 7d ████░ 92%`. Each bar is 5 blocks
+  of 20% instead of 10 of 10%; the % beside it is still exact.
+- The session timer shows minutes, then hours and minutes (`52m`, `3h 19m`), without seconds.
+
 ## 0.7.1 (2026-10-06)
 
 ### Fixed
