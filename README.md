@@ -110,7 +110,9 @@ request, a checklist card above the prompt, and Claude's final answer:
     ╰──────────────────────────────────────────────────╯
 
 While it is on, Claude is asked to break each request into a few tasks first, so the card has a list. When Claude
-finishes, the card reads `✓ 4 of 4 done · 3m` until your next request. Permission prompts, Claude's questions to you,
+finishes, the card reads `✓ 4 of 4 done · 3m` until your next request. When Claude starts helper agents, a line
+under the working task counts them (`↳ 3 agents: 2 done, 1 running`); if any are still running when Claude
+answers, the card says so, and it re-opens when they report back and Claude carries on. Permission prompts, Claude's questions to you,
 and Claude Code's notices are never hidden. Nothing is deleted: turn Clean View off and every hidden row shows again.
 
 ## When it updates

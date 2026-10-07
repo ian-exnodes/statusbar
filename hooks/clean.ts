@@ -48,19 +48,47 @@ export const elapsed = (ms: number) => {
 }
 
 export type CardRow = { mark: string; subject: string; label: string; color?: string; isBold?: true; isDim?: true }
-export type Card = { title: string; step?: string; filled: number; rows: CardRow[]; footer?: string }
+export type CardAgents = { text: string; hasFailed: boolean; afterRow?: number }
+export type Card = { title: string; step?: string; filled: number; rows: CardRow[]; footer?: string; agents?: CardAgents }
 
-export const card = (c: CleanChecklist, now: number, accent: string): Card => {
+const RUNNING = ['pending', 'running', 'waiting']
+const FAILED = ['failed', 'killed']
+
+// Agent statuses as $.agent.list() reports them; done covers completed and idle
+export const agentsSummary = (statuses: readonly string[]) => {
+  if (statuses.length === 0) return undefined
+  const running = statuses.filter(s => RUNNING.includes(s)).length
+  const failed = statuses.filter(s => FAILED.includes(s)).length
+  const done = statuses.length - running - failed
+  const noun = statuses.length === 1 ? 'agent' : 'agents'
+  const parts = [done && `${done} done`, running && `${running} running`, failed && `${failed} failed`].filter(Boolean)
+  const detail = parts.length === 1 ? String(parts[0]).replace(/^\d+ /, '') : parts.join(', ')
+  return { text: `${statuses.length} ${noun}: ${detail}`, hasFailed: failed > 0, running }
+}
+
+export const agentSpawned = (c: CleanChecklist, id: string): CleanChecklist =>
+  c.agentIds?.includes(id) ? c : { ...c, agentIds: [...(c.agentIds ?? []), id] }
+
+// Background agents reported back and Claude carries on with the same request
+export const reopened = (c: CleanChecklist): CleanChecklist => {
+  const { endedAt: _ended, outcome: _outcome, ...open } = c
+  return open
+}
+
+export const card = (c: CleanChecklist, now: number, accent: string, agentStatuses: readonly string[] = []): Card => {
   const total = c.tasks.length
   const done = c.tasks.filter(t => t.status === 'completed').length
   const time = elapsed((c.endedAt ?? now) - c.startedAt)
   const counts = total ? `${done} of ${total} done · ` : ''
+  const summary = agentsSummary(agentStatuses)
 
   if (c.endedAt !== undefined) {
-    const footer = c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}` : `Stopped · ${counts}${time}`
+    const still = summary?.running ? ` · ${summary.running} ${summary.running === 1 ? 'agent' : 'agents'} still running` : ''
+    const footer = c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}${still}` : `Stopped · ${counts}${time}${still}`
     return { title: c.title, filled: 0, rows: [], footer }
   }
-  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}` }
+  const agents = summary && { text: summary.text, hasFailed: summary.hasFailed }
+  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...(agents ? { agents } : {}) }
 
   const working = c.tasks.findIndex(t => t.status === 'in_progress')
   const next = c.tasks.findIndex((t, i) => t.status === 'pending' && i > working)
@@ -74,6 +102,7 @@ export const card = (c: CleanChecklist, now: number, accent: string): Card => {
     step: `Step ${working >= 0 ? working + 1 : done} of ${total}`,
     filled: Math.round((done / total) * BAR_CELLS),
     rows,
+    ...(agents ? { agents: { ...agents, ...(working >= 0 ? { afterRow: working } : {}) } } : {}),
   }
 }
 

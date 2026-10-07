@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.8.1 (2026-10-06)
+
+### Added
+
+- Clean View counts Claude's helper agents on the card: `↳ 3 agents: 2 done, 1 running` under the working task
+  (failures in red). A card closed while agents still run says `· 1 agent still running`, and it re-opens when they
+  report back and Claude carries on.
+
 ## 0.8.0 (2026-10-06)
 
 ### Added
