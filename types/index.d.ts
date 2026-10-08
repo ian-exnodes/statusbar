@@ -7,6 +7,8 @@ export type StatusEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 /** A task on the Clean View card, as Claude's task tools report it. */
 export type CleanTaskStatus = 'pending' | 'in_progress' | 'completed'
 export type CleanTask = { id: string; subject: string; status: CleanTaskStatus }
+/** A helper agent on the card: the Agent call's description, and the task in progress when it started. */
+export type CleanAgent = { id: string; description: string; taskId?: string }
 
 /** The Clean View card for the current request. */
 export type CleanChecklist = {
@@ -17,7 +19,7 @@ export type CleanChecklist = {
   endedAt?: number
   outcome?: 'answer' | 'stopped'
   /** Helper agents the main conversation started for this request. */
-  agentIds?: string[]
+  agents?: CleanAgent[]
 }
 
 export type StatusFigures = {
@@ -55,6 +57,7 @@ declare module 'claude-code' {
       finals: string[]
       showNotes: boolean
       agentStatus: Record<string, string>
+      frame: number
     }
   }
 }

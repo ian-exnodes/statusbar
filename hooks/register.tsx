@@ -1,6 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { BuiltinToolResults, EngineInterface, Register, RenderInput, ResolveInput } from 'claude-code'
 
+import type { CardGroup } from './clean'
+
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, finalsFromMessages, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
@@ -33,6 +35,9 @@ const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
 const showNotes = atom({ plugin: 'statusbar', key: 'showNotes' } as const, false)
 // The latest status of each helper agent on the card, read from $.agent.list() on the 1s tick
 const agentStatus = atom({ plugin: 'statusbar', key: 'agentStatus' } as const, {})
+// The card's animation frame: the working task's spinner and sliding bar
+const frame = atom({ plugin: 'statusbar', key: 'frame' } as const, 0)
+const FRAME_MS = 150
 
 // A row drawn as nothing: a ui.render hook that returns null fails and the engine draws the row anyway
 const empty = ($: EngineInterface, e: ResolveInput) => {
@@ -67,10 +72,24 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
 
   const { Box, Text } = $.ui.resolve(e)
   const accent = modelColor(f?.model ?? '')
-  const statuses = (c.agentIds ?? []).flatMap(id => statusById[id] ? [statusById[id]] : [])
-  const k = card(c, await $.clock.now(), accent, statuses)
-  const agentLine = k.agents && (
-    <Text color={k.agents.hasFailed ? 'red' : undefined} dimColor={!k.agents.hasFailed}>  ↳ {k.agents.text}</Text>
+  const k = card(c, await $.clock.now(), accent, statusById, await read($, frame))
+
+  // ▰ cells in the accent (red with a failed agent), ▱ cells dim; then an agent row each
+  const groupRows = (g: CardGroup, key: string) => (
+    <Box key={key} flexDirection="column" paddingLeft={2}>
+      <Text>
+        {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
+          ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
+        {g.label && <Text color={g.color} dimColor={!g.color}> {g.label}</Text>}
+      </Text>
+      {g.agents.map((a, i) => (
+        <Box key={`agent${i}`}>
+          <Box flexGrow={1}><Text color={a.color}>{a.mark} {a.subject}</Text></Box>
+          <Text color={a.color} dimColor={a.label === 'Done'}>  {a.label}</Text>
+        </Box>
+      ))}
+      {g.more > 0 && <Text dimColor>+{g.more} more</Text>}
+    </Box>
   )
 
   return (
@@ -83,7 +102,7 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
           <Text dimColor>{'░'.repeat(BAR_CELLS - k.filled)}</Text>
         </Box>
       )}
-      {k.agents?.afterRow === undefined && agentLine}
+      {k.group && groupRows(k.group, 'loose')}
       {k.rows.map((row, i) => (
         <Box key={`task${i}`} flexDirection="column">
           <Box>
@@ -92,7 +111,7 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
             </Box>
             <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
           </Box>
-          {k.agents?.afterRow === i && agentLine}
+          {row.group && groupRows(row.group, `group${i}`)}
         </Box>
       ))}
       {k.footer && <Text color={c.outcome === 'answer' ? 'green' : undefined} dimColor={c.outcome !== 'answer'}>{k.footer}</Text>}
@@ -166,14 +185,22 @@ async function tick($: EngineInterface) {
     quotas: quotas(usage.rateLimits),
   })
   const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
-  if (isOn && c?.agentIds?.length) {
+  if (isOn && c?.agents?.length) {
     const agents = await $.agent.list()
     await update($, agentStatus, () => Object.fromEntries(agents.map(a => [a.id, a.status])))
   }
 }
 
+// Moves the card's frame on only while something on it moves, so an idle session does not redraw
+async function animate($: EngineInterface) {
+  const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
+  const isMoving = c !== null && c.endedAt === undefined && (c.tasks.some(t => t.status === 'in_progress') || !!c.agents?.length)
+  if (isOn && isMoving) await update($, frame, n => n + 1)
+}
+
 export const register: Register = on => {
   let ticker: { cancel: () => void } | undefined
+  let animator: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
@@ -204,6 +231,8 @@ export const register: Register = on => {
     await refresh($)
     ticker?.cancel()
     ticker = $.clock.every(1000, () => tick($))
+    animator?.cancel()
+    animator = $.clock.every(FRAME_MS, () => animate($))
     return r
   })
 
@@ -362,7 +391,7 @@ export const register: Register = on => {
     const r = await next(e)
     const id = r.agentId
     if (r.deny === undefined && id !== undefined && e.parentAgentId === undefined && (await read($, cleanView))) {
-      await update($, checklist, c => c && agentSpawned(c, id))
+      await update($, checklist, c => c && agentSpawned(c, id, e.description))
     }
     return r
   })

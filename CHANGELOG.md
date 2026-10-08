@@ -11,6 +11,20 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.8.2 (2026-10-08)
+
+### Added
+
+- Clean View's working task animates: its mark spins and a bar slides under it.
+- Helper agents are listed under the task that was in progress when they started, one row each (`✓ Done`,
+  `⠹ Running`, `✗ Failed`; past 5, `+N more`), and that task's bar shows how many have finished
+  (`1 of 3 · 33%`). Tasks without agents get the sliding bar and no %, since nothing reports their progress.
+
+### Changed
+
+- The `↳ 3 agents: 2 done, 1 running` line is replaced by those rows. Agents still running keep their rows under a
+  task marked done.
+
 ## 0.8.1 (2026-10-06)
 
 ### Added

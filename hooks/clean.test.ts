@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
-  agentSpawned, agentsSummary, reopened,
+  agentSpawned, reopened, shimmer, SPINNER, TASK_CELLS,
 } from './clean'
 
 const start = startChecklist('Build a weather dashboard for New York with live data and a shareable link', 0)
@@ -36,7 +36,7 @@ describe('clean view', () => {
     const k = card(c, 60_000, 'magenta')
     expect(k.step).toBe('Step 2 of 4')
     expect(k.filled).toBe(5)
-    expect(k.rows.map(r => `${r.mark} ${r.label}`)).toEqual(['✓ Done', '● Working', '○ Next', '○ Up next'])
+    expect(k.rows.map(r => `${r.mark} ${r.label}`)).toEqual(['✓ Done', `${SPINNER[0]} Working`, '○ Next', '○ Up next'])
     expect(k.rows[0]?.color).toBe('green')
     expect(k.rows[1]?.color).toBe('magenta')
     expect(k.rows[1]?.isBold).toBe(true)
@@ -139,39 +139,81 @@ describe('clean view', () => {
     expect(finalsFromMessages(history)).toEqual(['Both files have 3 lines.', 'Sorted.'])
   })
 
-  test('agents are summed up: running, done, failed', async () => {
-    expect(agentsSummary([])).toBeUndefined()
-    expect(agentsSummary(['running'])?.text).toBe('1 agent: running')
-    expect(agentsSummary(['completed', 'idle', 'waiting'])?.text).toBe('3 agents: 2 done, 1 running')
-    expect(agentsSummary(['completed', 'completed'])?.text).toBe('2 agents: done')
-    const failed = agentsSummary(['completed', 'failed', 'killed', 'pending'])
-    expect(failed?.text).toBe('4 agents: 1 done, 1 running, 2 failed')
-    expect(failed?.hasFailed).toBe(true)
-    expect(failed?.running).toBe(1)
-  })
-
-  test('a spawned agent joins the card once', async () => {
-    const c = agentSpawned(agentSpawned(four, 'a1'), 'a1')
-    expect(agentSpawned(c, 'a2').agentIds).toEqual(['a1', 'a2'])
-  })
-
-  test('the agent line sits under the working task, or under the title without one', async () => {
+  test('the working task animates: its mark spins and a bar slides back and forth', async () => {
     const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
-    const k = card(working, 0, 'blue', ['running', 'completed'])
-    expect(k.agents).toEqual({ text: '2 agents: 1 done, 1 running', hasFailed: false, afterRow: 1 })
-    expect(card(start, 0, 'blue', ['running']).agents?.afterRow).toBeUndefined()
-    expect(card(four, 0, 'blue').agents).toBeUndefined()
+    expect(card(working, 0, 'blue', {}, 3).rows[1]?.mark).toBe(SPINNER[3])
+    expect(card(working, 0, 'blue', {}, SPINNER.length).rows[1]?.mark).toBe(SPINNER[0])
+    expect(shimmer(0)).toBe('▰▰▰▱▱▱▱▱▱▱▱▱')
+    expect(shimmer(2)).toBe('▱▱▰▰▰▱▱▱▱▱▱▱')
+    expect(shimmer(9)).toBe('▱▱▱▱▱▱▱▱▱▰▰▰')
+    expect(shimmer(10)).toBe('▱▱▱▱▱▱▱▱▰▰▰▱')
+    expect(shimmer(18)).toBe(shimmer(0))
+    expect(shimmer(5).length).toBe(TASK_CELLS)
+    // No agents under it: motion only, never a made-up %
+    const group = card(working, 0, 'blue', {}, 2).rows[1]?.group
+    expect(group).toEqual({ cells: shimmer(2), agents: [], more: 0 })
+    expect(card(working, 0, 'blue').rows[0]?.group).toBeUndefined()
+  })
+
+  test('a spawned agent joins the card once, under the task in progress', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = agentSpawned(agentSpawned(working, 'a1', 'security review'), 'a1', 'security review')
+    expect(c.agents).toEqual([{ id: 'a1', description: 'security review', taskId: 't1' }])
+    expect(agentSpawned(four, 'a2', 'look around').agents).toEqual([{ id: 'a2', description: 'look around' }])
+  })
+
+  test('agents under a task: a row each and a real % of those finished', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = ['security review', 'performance review', 'test coverage review']
+      .reduce((x, d, i) => agentSpawned(x, `a${i}`, d), working)
+    const group = card(c, 0, 'blue', { a0: 'completed', a1: 'running' }, 1).rows[1]?.group
+    expect(group?.label).toBe('1 of 3 · 33%')
+    expect(group?.cells).toBe('▰▰▰▰▱▱▱▱▱▱▱▱')
+    expect(group?.agents.map(a => `${a.mark} ${a.subject} ${a.label}`)).toEqual([
+      '✓ security review Done', `${SPINNER[1]} performance review Running`, `${SPINNER[1]} test coverage review Running`,
+    ])
+    expect(group?.agents[0]?.color).toBe('green')
+    expect(group?.agents[1]?.color).toBe('blue')
+  })
+
+  test('failed agents count as finished and show in red', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = ['one', 'two'].reduce((x, d, i) => agentSpawned(x, `a${i}`, d), working)
+    const group = card(c, 0, 'blue', { a0: 'idle', a1: 'killed' }).rows[1]?.group
+    expect(group?.label).toBe('2 of 2 · 100% · 1 failed')
+    expect(group?.color).toBe('red')
+    expect(group?.agents[1]).toEqual({ mark: '✗', subject: 'two', label: 'Failed', color: 'red' })
+  })
+
+  test('more than 5 agents: the rest are counted, not listed', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = Array.from({ length: 8 }, (_, i) => i).reduce((x, i) => agentSpawned(x, `a${i}`, `agent ${i}`), working)
+    const group = card(c, 0, 'blue').rows[1]?.group
+    expect(group?.agents.length).toBe(5)
+    expect(group?.more).toBe(3)
+    expect(group?.label).toBe('0 of 8 · 0%')
+  })
+
+  test('agents stay under a finished task while they still run; agents with no task sit under the title', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = taskUpdated(agentSpawned(working, 'a0', 'background check'), { taskId: 't1', status: 'completed' })
+    expect(card(c, 0, 'blue', { a0: 'running' }).rows[1]?.group?.agents.length).toBe(1)
+    expect(card(c, 0, 'blue', { a0: 'completed' }).rows[1]?.group).toBeUndefined()
+    const loose = agentSpawned(start, 'a9', 'look around')
+    expect(card(loose, 0, 'blue').group?.agents.map(a => a.subject)).toEqual(['look around'])
+    expect(card(loose, 0, 'blue').footer).toBe('Working… 0s')
+    expect(card(four, 0, 'blue').group).toBeUndefined()
   })
 
   test('a card closed while agents still run says so; a continuation re-opens it', async () => {
     const all = four.tasks.reduce((c, t) => taskUpdated(c, { taskId: t.id, status: 'completed' }), four)
-    const closed = turnEnded(all, 192_000, 'answer')
-    expect(card(closed, 0, 'blue', ['running', 'completed']).footer).toBe('✓ 4 of 4 done · 3m · 1 agent still running')
-    expect(card(closed, 0, 'blue', ['completed']).footer).toBe('✓ 4 of 4 done · 3m')
+    const closed = turnEnded(agentSpawned(agentSpawned(all, 'a0', 'x'), 'a1', 'y'), 192_000, 'answer')
+    expect(card(closed, 0, 'blue', { a0: 'running', a1: 'completed' }).footer).toBe('✓ 4 of 4 done · 3m · 1 agent still running')
+    expect(card(closed, 0, 'blue', { a0: 'completed', a1: 'idle' }).footer).toBe('✓ 4 of 4 done · 3m')
     const open = reopened(closed)
     expect(open.endedAt).toBeUndefined()
     expect(open.outcome).toBeUndefined()
-    expect(card(open, 200_000, 'blue').footer).toBeUndefined()
+    expect(card(open, 200_000, 'blue', { a0: 'completed', a1: 'idle' }).footer).toBeUndefined()
   })
 
   test('only the last 50 final answers are kept', async () => {

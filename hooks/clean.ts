@@ -1,6 +1,9 @@
-import type { CleanChecklist, CleanTaskStatus } from '../types'
+import type { CleanAgent, CleanChecklist, CleanTaskStatus } from '../types'
 
 export const BAR_CELLS = 20
+export const TASK_CELLS = 12
+const AGENTS_SHOWN = 5
+export const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 export const TITLE_MAX = 48
 const FINALS_KEPT = 50
 
@@ -47,27 +50,23 @@ export const elapsed = (ms: number) => {
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
-export type CardRow = { mark: string; subject: string; label: string; color?: string; isBold?: true; isDim?: true }
-export type CardAgents = { text: string; hasFailed: boolean; afterRow?: number }
-export type Card = { title: string; step?: string; filled: number; rows: CardRow[]; footer?: string; agents?: CardAgents }
+export type CardAgentRow = { mark: string; subject: string; label: string; color?: string }
+// Under a task (or the title): a bar, a real % when agents report one, and an agent row each
+export type CardGroup = { cells: string; label?: string; color?: string; agents: CardAgentRow[]; more: number }
+export type CardRow = { mark: string; subject: string; label: string; color?: string; isBold?: true; isDim?: true; group?: CardGroup }
+export type Card = { title: string; step?: string; filled: number; rows: CardRow[]; footer?: string; group?: CardGroup }
 
-const RUNNING = ['pending', 'running', 'waiting']
+// Agent statuses as $.agent.list() reports them; one not listed yet has only just been spawned
+const DONE = ['completed', 'idle']
 const FAILED = ['failed', 'killed']
+const isRunning = (status: string | undefined) => !DONE.includes(status ?? '') && !FAILED.includes(status ?? '')
 
-// Agent statuses as $.agent.list() reports them; done covers completed and idle
-export const agentsSummary = (statuses: readonly string[]) => {
-  if (statuses.length === 0) return undefined
-  const running = statuses.filter(s => RUNNING.includes(s)).length
-  const failed = statuses.filter(s => FAILED.includes(s)).length
-  const done = statuses.length - running - failed
-  const noun = statuses.length === 1 ? 'agent' : 'agents'
-  const parts = [done && `${done} done`, running && `${running} running`, failed && `${failed} failed`].filter(Boolean)
-  const detail = parts.length === 1 ? String(parts[0]).replace(/^\d+ /, '') : parts.join(', ')
-  return { text: `${statuses.length} ${noun}: ${detail}`, hasFailed: failed > 0, running }
+// The agent joins the task in progress when it starts, so parallel tasks keep their own agents
+export const agentSpawned = (c: CleanChecklist, id: string, description: string): CleanChecklist => {
+  if (c.agents?.some(a => a.id === id)) return c
+  const taskId = c.tasks.find(t => t.status === 'in_progress')?.id
+  return { ...c, agents: [...(c.agents ?? []), { id, description, ...(taskId ? { taskId } : {}) }] }
 }
-
-export const agentSpawned = (c: CleanChecklist, id: string): CleanChecklist =>
-  c.agentIds?.includes(id) ? c : { ...c, agentIds: [...(c.agentIds ?? []), id] }
 
 // Background agents reported back and Claude carries on with the same request
 export const reopened = (c: CleanChecklist): CleanChecklist => {
@@ -75,34 +74,73 @@ export const reopened = (c: CleanChecklist): CleanChecklist => {
   return open
 }
 
-export const card = (c: CleanChecklist, now: number, accent: string, agentStatuses: readonly string[] = []): Card => {
+// A block bouncing across the bar: motion that says "alive" without claiming a %
+export const shimmer = (frame: number, block = 3) => {
+  const span = TASK_CELLS - block
+  const at = frame % (span * 2)
+  const pos = at <= span ? at : span * 2 - at
+  return Array.from({ length: TASK_CELLS }, (_, i) => i >= pos && i < pos + block ? '▰' : '▱').join('')
+}
+
+const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<string, string>>, accent: string, spin: string): CardGroup => {
+  const statuses = agents.map(a => statusById[a.id])
+  const finished = statuses.filter(s => !isRunning(s)).length
+  const failed = statuses.filter(s => FAILED.includes(s ?? '')).length
+  const percent = Math.round((finished / agents.length) * 100)
+  const filled = Math.round((finished / agents.length) * TASK_CELLS)
+  return {
+    cells: '▰'.repeat(filled) + '▱'.repeat(TASK_CELLS - filled),
+    label: `${finished} of ${agents.length} · ${percent}%${failed ? ` · ${failed} failed` : ''}`,
+    ...(failed ? { color: 'red' } : {}),
+    agents: agents.slice(0, AGENTS_SHOWN).map((a, i): CardAgentRow =>
+      FAILED.includes(statuses[i] ?? '') ? { mark: '✗', subject: a.description, label: 'Failed', color: 'red' }
+        : isRunning(statuses[i]) ? { mark: spin, subject: a.description, label: 'Running', color: accent }
+          : { mark: '✓', subject: a.description, label: 'Done', color: 'green' }),
+    more: Math.max(0, agents.length - AGENTS_SHOWN),
+  }
+}
+
+export const card = (
+  c: CleanChecklist, now: number, accent: string, statusById: Readonly<Record<string, string>> = {}, frame = 0,
+): Card => {
   const total = c.tasks.length
   const done = c.tasks.filter(t => t.status === 'completed').length
   const time = elapsed((c.endedAt ?? now) - c.startedAt)
   const counts = total ? `${done} of ${total} done · ` : ''
-  const summary = agentsSummary(agentStatuses)
+  const agents = c.agents ?? []
+  const spin = SPINNER[frame % SPINNER.length] ?? '●'
 
   if (c.endedAt !== undefined) {
-    const still = summary?.running ? ` · ${summary.running} ${summary.running === 1 ? 'agent' : 'agents'} still running` : ''
+    const running = agents.filter(a => isRunning(statusById[a.id])).length
+    const still = running ? ` · ${running} ${running === 1 ? 'agent' : 'agents'} still running` : ''
     const footer = c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}${still}` : `Stopped · ${counts}${time}${still}`
     return { title: c.title, filled: 0, rows: [], footer }
   }
-  const agents = summary && { text: summary.text, hasFailed: summary.hasFailed }
-  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...(agents ? { agents } : {}) }
+
+  const taskIds = new Set(c.tasks.map(t => t.id))
+  const loose = agents.filter(a => a.taskId === undefined || !taskIds.has(a.taskId))
+  const group = loose.length ? { group: agentGroup(loose, statusById, accent, spin) } : {}
+  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...group }
 
   const working = c.tasks.findIndex(t => t.status === 'in_progress')
   const next = c.tasks.findIndex((t, i) => t.status === 'pending' && i > working)
-  const rows = c.tasks.map((t, i): CardRow =>
-    t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green' }
-      : t.status === 'in_progress' ? { mark: '●', subject: t.subject, label: 'Working', color: accent, isBold: true }
-        : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true })
+  const rows = c.tasks.map((t, i): CardRow => {
+    const own = agents.filter(a => a.taskId === t.id)
+    const isWorking = t.status === 'in_progress'
+    const showsAgents = own.length > 0 && (isWorking || own.some(a => isRunning(statusById[a.id])))
+    const taskGroup = showsAgents ? { group: agentGroup(own, statusById, accent, spin) }
+      : isWorking ? { group: { cells: shimmer(frame), agents: [], more: 0 } } : {}
+    return t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green', ...taskGroup }
+      : isWorking ? { mark: spin, subject: t.subject, label: 'Working', color: accent, isBold: true, ...taskGroup }
+        : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true }
+  })
 
   return {
     title: c.title,
     step: `Step ${working >= 0 ? working + 1 : done} of ${total}`,
     filled: Math.round((done / total) * BAR_CELLS),
     rows,
-    ...(agents ? { agents: { ...agents, ...(working >= 0 ? { afterRow: working } : {}) } } : {}),
+    ...group,
   }
 }
 
