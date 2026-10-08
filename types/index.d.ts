@@ -56,6 +56,7 @@ declare module 'claude-code' {
       checklist: CleanChecklist | null
       finals: string[]
       showNotes: boolean
+      nextCard: string | null
       agentStatus: Record<string, string>
       frame: number
     }

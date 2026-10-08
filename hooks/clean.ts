@@ -186,9 +186,12 @@ export const turnOutcome = (e: { reason: string; isAborted: boolean; agentId?: s
 // After an error or refusal the person needs to see why Claude stopped; Esc is their own choice
 export const revealsNotes = (e: { reason: string }) => e.reason === 'error' || e.reason === 'refusal'
 
-// A continuation turn belongs to the request already on the card: "" text, or a background agent reporting back.
-// ponytail: matched on the notification's text, since turn.start carries no origin; switch if it gets one
-export const startsCard = (text: string) => text.trim().length > 0 && !text.trimStart().startsWith('<task-notification>')
+// Only the person's own prompt opens a card. Agent reports, agent messages and other deliveries start turns too
+// (their text is engine-made, like <task-notification>), and they carry on the request already on the card.
+// A prompt typed mid-turn (turnId set) joins the running turn, so its card goes on as well.
+const PERSON = ['composer', 'bridge']
+export const startsCard = (e: { text: string; origin: { kind: string }; turnId?: string }) =>
+  PERSON.includes(e.origin.kind) && e.turnId === undefined && e.text.trim().length > 0
 
 type HistoryMessage = { role: 'user' | 'assistant'; text: string; toolResults?: readonly unknown[] }
 

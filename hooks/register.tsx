@@ -33,6 +33,8 @@ const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
 // Set when a turn ends in an error or refusal: Claude's rows show until the next request, so the reason is visible
 const showNotes = atom({ plugin: 'statusbar', key: 'showNotes' } as const, false)
+// The person's prompt, from prompt.submit (which knows the origin) to the turn.start that follows it
+const nextCard = atom({ plugin: 'statusbar', key: 'nextCard' } as const, null)
 // The latest status of each helper agent on the card, read from $.agent.list() on the 1s tick
 const agentStatus = atom({ plugin: 'statusbar', key: 'agentStatus' } as const, {})
 // The card's animation frame: the working task's spinner and sliding bar
@@ -298,6 +300,7 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind === 'plugin') return next(e)
     await closePicker($)
+    if (startsCard(e)) await update($, nextCard, () => e.text)
     // Clean View's planning note rides with the person's prompt as context they never see:
     // cc-plugin-sec-default keeps user-tier plugins out of prompt.compose (the system prompt)
     return (await read($, cleanView)) ? next({ ...e, context: withCleanViewNote(e.context) }) : next(e)
@@ -374,14 +377,16 @@ export const register: Register = on => {
   // Clean View
 
   on('turn.start', async ($, e, next) => {
-    if (startsCard(e.text)) {
+    const request = await read($, nextCard)
+    if (request !== null) {
+      await update($, nextCard, () => null)
       await update($, showNotes, () => false)
       if (await read($, cleanView)) {
         const now = await $.clock.now()
-        await update($, checklist, () => startChecklist(e.text, now))
+        await update($, checklist, () => startChecklist(request, now))
       }
     } else {
-      // A continuation (background agents reported back): the same request goes on, so the card re-opens
+      // A continuation (agents reported back or sent a message): the same request goes on, so the card re-opens
       await update($, checklist, c => c && c.endedAt !== undefined ? reopened(c) : c)
     }
     return next(e)

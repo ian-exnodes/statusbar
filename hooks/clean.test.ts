@@ -120,10 +120,15 @@ describe('clean view', () => {
     expect(revealsNotes({ reason: 'aborted' })).toBe(false)
   })
 
-  test('a continuation turn with no typed text keeps the card', async () => {
-    expect(startsCard('Build the page')).toBe(true)
-    expect(startsCard('   ')).toBe(false)
-    expect(startsCard('<task-notification>\n<task-id>a1</task-id> completed')).toBe(false)
+  test('only a prompt the person sent opens a card; agent reports and messages carry on the one there', async () => {
+    expect(startsCard({ text: 'Build the page', origin: { kind: 'composer' } })).toBe(true)
+    expect(startsCard({ text: 'Build the page', origin: { kind: 'bridge' } })).toBe(true)
+    expect(startsCard({ text: '   ', origin: { kind: 'composer' } })).toBe(false)
+    expect(startsCard({ text: '<task-notification>…', origin: { kind: 'task-notification' } })).toBe(false)
+    expect(startsCard({ text: '<agent-message from="ac27">…', origin: { kind: 'unclassified' } })).toBe(false)
+    expect(startsCard({ text: 'hi', origin: { kind: 'peer-send-message' } })).toBe(false)
+    // Typed while Claude works: it joins the running turn, so the card of that turn goes on
+    expect(startsCard({ text: 'also add tests', origin: { kind: 'composer' }, turnId: 'turn-1' })).toBe(false)
   })
 
   test("a resumed session's final answers come from its history", async () => {

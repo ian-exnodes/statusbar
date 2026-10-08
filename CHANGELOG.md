@@ -30,8 +30,8 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 - A turn that ends while background agents still run no longer collapses the card to `✓ 1 of 2 done · … still
   running`: the card stays open on the agents' rows with `Waiting for 3 agents · 12s`, and collapses to its done
   line once they all finish.
-- A background agent reporting back no longer starts a new card titled `<task-notification>`; the card of the
-  request carries on.
+- Only a prompt you send opens a new card. A background agent reporting back (`<task-notification>`) or sending a
+  message (`<agent-message …>`) no longer replaces the card with one of its own; the card of your request carries on.
 
 ## 0.8.1 (2026-10-06)
 
