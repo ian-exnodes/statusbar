@@ -1,9 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { BuiltinToolResults, EngineInterface, Register, RenderInput, ResolveInput } from 'claude-code'
 
+import type { CardGroup, Trail } from './clean'
+
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  agentSpawned, finalsFromMessages, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
+  agentSpawned, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -30,14 +32,28 @@ const setCleanView = async ($: EngineInterface, isOn: boolean) => {
 const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
 // Set when a turn ends in an error or refusal: Claude's rows show until the next request, so the reason is visible
+// Also the card's Details button: Claude's hidden rows show while it is set
 const showNotes = atom({ plugin: 'statusbar', key: 'showNotes' } as const, false)
+// The trail line drawn above each final answer of this session (last 50)
+const trails = atom({ plugin: 'statusbar', key: 'trails' } as const, [])
+// The person's prompt, from prompt.submit (which knows the origin) to the turn.start that follows it
+const nextCard = atom({ plugin: 'statusbar', key: 'nextCard' } as const, null)
 // The latest status of each helper agent on the card, read from $.agent.list() on the 1s tick
 const agentStatus = atom({ plugin: 'statusbar', key: 'agentStatus' } as const, {})
+// The card's animation frame: the working task's spinner and sliding bar
+const frame = atom({ plugin: 'statusbar', key: 'frame' } as const, 0)
+const FRAME_MS = 150
 
 // A row drawn as nothing: a ui.render hook that returns null fails and the engine draws the row anyway
 const empty = ($: EngineInterface, e: ResolveInput) => {
   const { Box } = $.ui.resolve(e)
   return <Box />
+}
+
+// Claude's work rows hide while Clean View is on, unless the card's Details shows them
+const hidesRows = async ($: EngineInterface) => {
+  const [isOn, isRevealed] = await Promise.all([read($, cleanView), read($, showNotes)])
+  return isOn && !isRevealed
 }
 
 const loadCleanView = async ($: EngineInterface) => {
@@ -58,24 +74,51 @@ const endCleanTurn = async (
   if (!(await read($, cleanView))) return
   const now = await $.clock.now()
   await update($, checklist, c => c && c.endedAt === undefined ? turnEnded(c, now, outcome) : c)
+  const c = await read($, checklist)
+  if (c !== null && e.answer.trim()) {
+    const trail: Trail = { answer: e.answer, line: trailLine(c.endedAt === undefined ? turnEnded(c, now, outcome) : c) }
+    await update($, trails, list => [...list, trail].slice(-50))
+  }
 }
 
 // The Clean View card for the band above the prompt, or null while there is none to show
 const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
-  const [isOn, c, f, statusById] = await Promise.all([read($, cleanView), read($, checklist), read($, figures), read($, agentStatus)])
+  const [isOn, c, f, statusById, isRevealed] = await Promise.all([
+    read($, cleanView), read($, checklist), read($, figures), read($, agentStatus), read($, showNotes),
+  ])
   if (!isOn || c === null || e.props.hasSurvey) return null
 
-  const { Box, Text } = $.ui.resolve(e)
+  const { Box, Text, Button } = $.ui.resolve(e)
   const accent = modelColor(f?.model ?? '')
-  const statuses = (c.agentIds ?? []).flatMap(id => statusById[id] ? [statusById[id]] : [])
-  const k = card(c, await $.clock.now(), accent, statuses)
-  const agentLine = k.agents && (
-    <Text color={k.agents.hasFailed ? 'red' : undefined} dimColor={!k.agents.hasFailed}>  ↳ {k.agents.text}</Text>
+  const k = card(c, await $.clock.now(), accent, statusById, await read($, frame))
+
+  // ▰ cells in the accent (red with a failed agent), ▱ cells dim; then an agent row each
+  const groupRows = (g: CardGroup, key: string) => (
+    <Box key={key} flexDirection="column" paddingLeft={2}>
+      <Text>
+        {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
+          ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
+        {g.label && <Text color={g.color} dimColor={!g.color}> {g.label}</Text>}
+      </Text>
+      {g.agents.map((a, i) => (
+        <Box key={`agent${i}`}>
+          <Box flexGrow={1}><Text color={a.color}>{a.mark} {a.subject}</Text></Box>
+          <Text color={a.color} dimColor={a.label === 'Done'}>  {a.label}</Text>
+        </Box>
+      ))}
+      {g.more > 0 && <Text dimColor>+{g.more} more</Text>}
+    </Box>
   )
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1}>
-      <Text bold><Text color={accent}>✧ </Text>{k.title}</Text>
+      <Box>
+        <Box flexGrow={1}><Text bold><Text color={accent}>✧ </Text>{k.title}</Text></Box>
+        <Box key="details">
+          <Button key="details" plain label={isRevealed ? '[ Hide details ]' : '[ Details ]'} hover={{ inverse: true }}
+            onPress={() => void update($, showNotes, shown => !shown)} />
+        </Box>
+      </Box>
       {k.step && (
         <Box>
           <Box width={14}><Text>{k.step}</Text></Box>
@@ -83,7 +126,7 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
           <Text dimColor>{'░'.repeat(BAR_CELLS - k.filled)}</Text>
         </Box>
       )}
-      {k.agents?.afterRow === undefined && agentLine}
+      {k.group && groupRows(k.group, 'loose')}
       {k.rows.map((row, i) => (
         <Box key={`task${i}`} flexDirection="column">
           <Box>
@@ -92,10 +135,10 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
             </Box>
             <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
           </Box>
-          {k.agents?.afterRow === i && agentLine}
+          {row.group && groupRows(row.group, `group${i}`)}
         </Box>
       ))}
-      {k.footer && <Text color={c.outcome === 'answer' ? 'green' : undefined} dimColor={c.outcome !== 'answer'}>{k.footer}</Text>}
+      {k.footer && <Text color={k.footer.startsWith('✓') ? 'green' : undefined} dimColor={!k.footer.startsWith('✓')}>{k.footer}</Text>}
     </Box>
   )
 }
@@ -166,14 +209,23 @@ async function tick($: EngineInterface) {
     quotas: quotas(usage.rateLimits),
   })
   const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
-  if (isOn && c?.agentIds?.length) {
+  if (isOn && c?.agents?.length) {
     const agents = await $.agent.list()
     await update($, agentStatus, () => Object.fromEntries(agents.map(a => [a.id, a.status])))
   }
 }
 
+// Moves the card's frame on only while something on it moves, so an idle session does not redraw
+async function animate($: EngineInterface) {
+  const [isOn, c, statusById] = await Promise.all([read($, cleanView), read($, checklist), read($, agentStatus)])
+  const hasRunning = !!c?.agents?.some(a => isRunning(statusById[a.id]))
+  const isMoving = c !== null && (hasRunning || (c.endedAt === undefined && c.tasks.some(t => t.status === 'in_progress')))
+  if (isOn && isMoving) await update($, frame, n => n + 1)
+}
+
 export const register: Register = on => {
   let ticker: { cancel: () => void } | undefined
+  let animator: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
@@ -182,6 +234,8 @@ export const register: Register = on => {
     await $.tool.register({
       name: 'checklist',
       description: "Shows the person your plan as a checklist while Clean View is on. Send the whole list each call.",
+      // In the prompt's tool list, so Claude calls it without a ToolSearch first
+      isDeferred: false,
       inputSchema: {
         type: 'object',
         properties: {
@@ -204,6 +258,8 @@ export const register: Register = on => {
     await refresh($)
     ticker?.cancel()
     ticker = $.clock.every(1000, () => tick($))
+    animator?.cancel()
+    animator = $.clock.every(FRAME_MS, () => animate($))
     return r
   })
 
@@ -268,6 +324,7 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind === 'plugin') return next(e)
     await closePicker($)
+    if (startsCard(e)) await update($, nextCard, () => e.text)
     // Clean View's planning note rides with the person's prompt as context they never see:
     // cc-plugin-sec-default keeps user-tier plugins out of prompt.compose (the system prompt)
     return (await read($, cleanView)) ? next({ ...e, context: withCleanViewNote(e.context) }) : next(e)
@@ -344,14 +401,16 @@ export const register: Register = on => {
   // Clean View
 
   on('turn.start', async ($, e, next) => {
-    if (startsCard(e.text)) {
+    const request = await read($, nextCard)
+    if (request !== null) {
+      await update($, nextCard, () => null)
       await update($, showNotes, () => false)
       if (await read($, cleanView)) {
         const now = await $.clock.now()
-        await update($, checklist, () => startChecklist(e.text, now))
+        await update($, checklist, () => startChecklist(request, now))
       }
     } else {
-      // A continuation (background agents reported back): the same request goes on, so the card re-opens
+      // A continuation (agents reported back or sent a message): the same request goes on, so the card re-opens
       await update($, checklist, c => c && c.endedAt !== undefined ? reopened(c) : c)
     }
     return next(e)
@@ -362,7 +421,7 @@ export const register: Register = on => {
     const r = await next(e)
     const id = r.agentId
     if (r.deny === undefined && id !== undefined && e.parentAgentId === undefined && (await read($, cleanView))) {
-      await update($, checklist, c => c && agentSpawned(c, id))
+      await update($, checklist, c => c && agentSpawned(c, id, e.description))
     }
     return r
   })
@@ -403,15 +462,38 @@ export const register: Register = on => {
     return r
   })
 
+  // Every tool call: the card's activity line (main loop) and the files changed (helper agents' edits count too)
+  on('tool.call', async ($, e, next) => {
+    const isOn = await read($, cleanView)
+    if (isOn && e.agentId === undefined) await update($, checklist, c => c && activitySet(c, activityOf(e.tool, e)))
+    const r = await next(e)
+    if (!isOn) return r
+    const path = (e as { file_path?: unknown }).file_path
+    if (r.deny === undefined && !r.isError && ['Edit', 'Write', 'NotebookEdit'].includes(e.tool) && typeof path === 'string') {
+      await update($, checklist, c => c && fileChanged(c, path))
+    }
+    return r
+  })
+
   // Drawing only: the stored transcript is untouched, so switching Clean View off shows every row again
-  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
-  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
-  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
-  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    const [isOn, list, isRevealed] = await Promise.all([read($, cleanView), read($, finals), read($, showNotes)])
-    if (!isOn || isRevealed || isFinalAnswer(e.props.text, list)) return next(e)
-    return empty($, e)
+    const [isOn, list, isRevealed, trailList] = await Promise.all([read($, cleanView), read($, finals), read($, showNotes), read($, trails)])
+    if (!isOn) return next(e)
+    if (!isRevealed && !isFinalAnswer(e.props.text, list)) return empty($, e)
+    // The request's trail line sits above its final answer
+    const line = trailFor(e.props.text, trailList)
+    if (line === undefined) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        <Text dimColor>{line}</Text>
+        {await next(e)}
+      </Box>
+    )
   })
 }

@@ -101,17 +101,23 @@ shows `◐ Clean`. Claude's tool calls, their results, code changes and its in-b
 request, a checklist card above the prompt, and Claude's final answer:
 
     ╭──────────────────────────────────────────────────╮
-    │ ✧ Build a weather dashboard for New York…        │
+    │ ✧ Build a weather dashboard for New…  [ Details ] │
     │ Step 2 of 4   ▓▓▓▓▓░░░░░░░░░░░░░░░               │
     │ ✓ Pick the page style and layout          Done   │
-    │ ● Check how the page gets live weather Working   │
+    │ ⠹ Check how the page gets live weather Working   │
+    │   ▱▱▰▰▰▱▱▱▱▱▱▱ Looking things up…                 │
     │ ○ Build the weather dashboard             Next   │
     │ ○ Publish it and share the link        Up next   │
     ╰──────────────────────────────────────────────────╯
 
 While it is on, Claude is asked to break each request into a few tasks first, so the card has a list. When Claude
-finishes, the card reads `✓ 4 of 4 done · 3m` until your next request. When Claude starts helper agents, a line
-under the working task counts them (`↳ 3 agents: 2 done, 1 running`); if any are still running when Claude
+finishes, the card reads `✓ 4 of 4 done · 3m · 2 files changed` until your next request, and a dim line above the
+answer keeps the same summary in the transcript. The working task's mark spins and a bar slides under it with what
+Claude is doing (`Reading files…`, `Running a command…`, `Editing register.tsx…`), so you can see it is still busy.
+`[ Details ]` shows the hidden rows for a look inside, and `[ Hide details ]` hides them again. When Claude starts helper agents, they join the task in progress:
+its bar becomes a real count of the agents that finished (`▰▰▰▰▱▱▱▱▱▱▱▱ 1 of 3 · 33%`), with a row for each agent
+(`✓ Done`, `⠹ Running`, `✗ Failed` in red; past 5, `+3 more`). A task without agents never shows a %, because
+nothing reports how far along it is. If any agents are still running when Claude
 answers, the card says so, and it re-opens when they report back and Claude carries on. Permission prompts, Claude's questions to you,
 and Claude Code's notices are never hidden. Nothing is deleted: turn Clean View off and every hidden row shows again.
 
@@ -131,7 +137,7 @@ Read-only git commands in the session's folder (`git branch --show-current`, `gi
 
 - **What it writes:** your Clean View on/off choice, in the plugin's own store under your Claude Code configuration folder. Nothing else.
 - **The picker:** when you pick, it changes `/config`'s Model setting or runs `/model` or `/effort`, as you would.
-- **A tool for Claude:** every session gets one tool from this plugin, `mcp__statusbar__checklist`, which Claude uses to send its plan to the Clean View card. It only reads the list it is given.
+- **A tool for Claude:** every session gets one tool from this plugin, `mcp__statusbar__checklist`, which Claude uses to send its plan to the Clean View card. It only reads the list it is given. It sits in Claude's tool list from the start, which adds its short description to each request.
 - **With Clean View on:** it attaches a short note to each of your prompts, which only Claude reads, asking it to plan the request with that tool.
 
 ## Develop

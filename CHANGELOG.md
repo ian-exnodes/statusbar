@@ -11,6 +11,39 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.0 (2026-10-08)
+
+### Added
+
+- The Clean View card says what Claude is doing, in plain words: `Reading files…`, `Running a command…`,
+  `Editing register.tsx…`, `Starting helpers…`, `Looking things up…`, `Using figma…`. It labels the working task's
+  bar, or stands in for `Working…` when Claude made no checklist.
+- The finished card counts the files changed for the request, helper agents' edits included:
+  `✓ 3 of 3 done · 2m · 4 files changed`.
+- `[ Details ]` on the card shows Claude's hidden rows (tool calls, results, in-between notes) without switching
+  Clean View off; `[ Hide details ]` hides them again, and the next request starts hidden.
+- A dim trail line above each final answer, `✓ Fix the login bug · 3 of 3 done · 2m · 1 file changed`, so scrolling
+  back shows what each request did. Answers from before a resumed session have none.
+- Clean View's working task animates: its mark spins and a bar slides under it.
+- Helper agents are listed under the task that was in progress when they started, one row each (`✓ Done`,
+  `⠹ Running`, `✗ Failed`; past 5, `+N more`), and that task's bar shows how many have finished
+  (`1 of 3 · 33%`). Tasks without agents get the sliding bar and no %, since nothing reports their progress.
+
+### Changed
+
+- Claude's checklist tool is in the prompt's tool list from the start, so Claude no longer loads it through
+  ToolSearch before its first call.
+- The `↳ 3 agents: 2 done, 1 running` line is replaced by those rows. Agents still running keep their rows under a
+  task marked done.
+
+### Fixed
+
+- A turn that ends while background agents still run no longer collapses the card to `✓ 1 of 2 done · … still
+  running`: the card stays open on the agents' rows with `Waiting for 3 agents · 12s`, and collapses to its done
+  line once they all finish.
+- Only a prompt you send opens a new card. A background agent reporting back (`<task-notification>`) or sending a
+  message (`<agent-message …>`) no longer replaces the card with one of its own; the card of your request carries on.
+
 ## 0.8.1 (2026-10-06)
 
 ### Added

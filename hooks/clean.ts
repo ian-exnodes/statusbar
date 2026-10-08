@@ -1,6 +1,9 @@
-import type { CleanChecklist, CleanTaskStatus } from '../types'
+import type { CleanAgent, CleanChecklist, CleanTaskStatus } from '../types'
 
 export const BAR_CELLS = 20
+export const TASK_CELLS = 12
+const AGENTS_SHOWN = 5
+export const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 export const TITLE_MAX = 48
 const FINALS_KEPT = 50
 
@@ -47,27 +50,23 @@ export const elapsed = (ms: number) => {
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
-export type CardRow = { mark: string; subject: string; label: string; color?: string; isBold?: true; isDim?: true }
-export type CardAgents = { text: string; hasFailed: boolean; afterRow?: number }
-export type Card = { title: string; step?: string; filled: number; rows: CardRow[]; footer?: string; agents?: CardAgents }
+export type CardAgentRow = { mark: string; subject: string; label: string; color?: string }
+// Under a task (or the title): a bar, a real % when agents report one, and an agent row each
+export type CardGroup = { cells: string; label?: string; color?: string; agents: CardAgentRow[]; more: number }
+export type CardRow = { mark: string; subject: string; label: string; color?: string; isBold?: true; isDim?: true; group?: CardGroup }
+export type Card = { title: string; step?: string; filled: number; rows: CardRow[]; footer?: string; group?: CardGroup }
 
-const RUNNING = ['pending', 'running', 'waiting']
+// Agent statuses as $.agent.list() reports them; one not listed yet has only just been spawned
+const DONE = ['completed', 'idle']
 const FAILED = ['failed', 'killed']
+export const isRunning = (status: string | undefined) => !DONE.includes(status ?? '') && !FAILED.includes(status ?? '')
 
-// Agent statuses as $.agent.list() reports them; done covers completed and idle
-export const agentsSummary = (statuses: readonly string[]) => {
-  if (statuses.length === 0) return undefined
-  const running = statuses.filter(s => RUNNING.includes(s)).length
-  const failed = statuses.filter(s => FAILED.includes(s)).length
-  const done = statuses.length - running - failed
-  const noun = statuses.length === 1 ? 'agent' : 'agents'
-  const parts = [done && `${done} done`, running && `${running} running`, failed && `${failed} failed`].filter(Boolean)
-  const detail = parts.length === 1 ? String(parts[0]).replace(/^\d+ /, '') : parts.join(', ')
-  return { text: `${statuses.length} ${noun}: ${detail}`, hasFailed: failed > 0, running }
+// The agent joins the task in progress when it starts, so parallel tasks keep their own agents
+export const agentSpawned = (c: CleanChecklist, id: string, description: string): CleanChecklist => {
+  if (c.agents?.some(a => a.id === id)) return c
+  const taskId = c.tasks.find(t => t.status === 'in_progress')?.id
+  return { ...c, agents: [...(c.agents ?? []), { id, description, ...(taskId ? { taskId } : {}) }] }
 }
-
-export const agentSpawned = (c: CleanChecklist, id: string): CleanChecklist =>
-  c.agentIds?.includes(id) ? c : { ...c, agentIds: [...(c.agentIds ?? []), id] }
 
 // Background agents reported back and Claude carries on with the same request
 export const reopened = (c: CleanChecklist): CleanChecklist => {
@@ -75,34 +74,121 @@ export const reopened = (c: CleanChecklist): CleanChecklist => {
   return open
 }
 
-export const card = (c: CleanChecklist, now: number, accent: string, agentStatuses: readonly string[] = []): Card => {
+// A block bouncing across the bar: motion that says "alive" without claiming a %
+export const shimmer = (frame: number, block = 3) => {
+  const span = TASK_CELLS - block
+  const at = frame % (span * 2)
+  const pos = at <= span ? at : span * 2 - at
+  return Array.from({ length: TASK_CELLS }, (_, i) => i >= pos && i < pos + block ? '▰' : '▱').join('')
+}
+
+const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<string, string>>, accent: string, spin: string): CardGroup => {
+  const statuses = agents.map(a => statusById[a.id])
+  const finished = statuses.filter(s => !isRunning(s)).length
+  const failed = statuses.filter(s => FAILED.includes(s ?? '')).length
+  const percent = Math.round((finished / agents.length) * 100)
+  const filled = Math.round((finished / agents.length) * TASK_CELLS)
+  return {
+    cells: '▰'.repeat(filled) + '▱'.repeat(TASK_CELLS - filled),
+    label: `${finished} of ${agents.length} · ${percent}%${failed ? ` · ${failed} failed` : ''}`,
+    ...(failed ? { color: 'red' } : {}),
+    agents: agents.slice(0, AGENTS_SHOWN).map((a, i): CardAgentRow =>
+      FAILED.includes(statuses[i] ?? '') ? { mark: '✗', subject: a.description, label: 'Failed', color: 'red' }
+        : isRunning(statuses[i]) ? { mark: spin, subject: a.description, label: 'Running', color: accent }
+          : { mark: '✓', subject: a.description, label: 'Done', color: 'green' }),
+    more: Math.max(0, agents.length - AGENTS_SHOWN),
+  }
+}
+
+// What Claude is doing, in the person's words; undefined for bookkeeping calls, which keep the activity there
+const QUIET = ['ToolSearch', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite']
+export const activityOf = (tool: string, input: object): string | undefined => {
+  const path = (input as { file_path?: unknown }).file_path
+  if (QUIET.includes(tool) || tool.startsWith('mcp__statusbar__')) return undefined
+  if (['Read', 'Grep', 'Glob', 'LSP'].includes(tool)) return 'Reading files…'
+  if (['Edit', 'Write', 'NotebookEdit'].includes(tool)) {
+    return typeof path === 'string' ? `Editing ${path.split('/').pop()}…` : 'Editing files…'
+  }
+  if (tool === 'Bash') return 'Running a command…'
+  if (tool === 'Agent') return 'Starting helpers…'
+  if (tool === 'WebFetch' || tool === 'WebSearch') return 'Looking things up…'
+  if (tool === 'AskUserQuestion') return 'Asking you a question…'
+  const server = /^mcp__([^_]+(?:_[^_]+)*?)__/.exec(tool)?.[1]
+  return server ? `Using ${server}…` : 'Working…'
+}
+
+export const activitySet = (c: CleanChecklist, activity: string | undefined): CleanChecklist =>
+  activity === undefined ? c : { ...c, activity }
+
+export const fileChanged = (c: CleanChecklist, path: string): CleanChecklist =>
+  c.files?.includes(path) ? c : { ...c, files: [...(c.files ?? []), path] }
+
+const filesText = (c: CleanChecklist) =>
+  c.files?.length ? ` · ${c.files.length} ${c.files.length === 1 ? 'file' : 'files'} changed` : ''
+
+const countsText = (c: CleanChecklist) => {
+  const done = c.tasks.filter(t => t.status === 'completed').length
+  return c.tasks.length ? `${done} of ${c.tasks.length} done · ` : ''
+}
+
+// One dim line above the request's final answer, so scrolling back shows what each request did
+export const trailLine = (c: CleanChecklist) => {
+  const time = elapsed((c.endedAt ?? c.startedAt) - c.startedAt)
+  return c.outcome === 'answer'
+    ? `✓ ${c.title} · ${countsText(c)}${time}${filesText(c)}`
+    : `Stopped · ${c.title} · ${countsText(c)}${time}${filesText(c)}`
+}
+
+export type Trail = { answer: string; line: string }
+// Only above the answer's first block: the terminal draws a reply in blocks
+export const trailFor = (text: string, trails: readonly Trail[]) => {
+  const block = text.trim()
+  return block ? trails.find(t => t.answer.trimStart().startsWith(block))?.line : undefined
+}
+
+export const card = (
+  c: CleanChecklist, now: number, accent: string, statusById: Readonly<Record<string, string>> = {}, frame = 0,
+): Card => {
   const total = c.tasks.length
   const done = c.tasks.filter(t => t.status === 'completed').length
   const time = elapsed((c.endedAt ?? now) - c.startedAt)
-  const counts = total ? `${done} of ${total} done · ` : ''
-  const summary = agentsSummary(agentStatuses)
+  const counts = countsText(c)
+  const agents = c.agents ?? []
+  const spin = SPINNER[frame % SPINNER.length] ?? '●'
 
-  if (c.endedAt !== undefined) {
-    const still = summary?.running ? ` · ${summary.running} ${summary.running === 1 ? 'agent' : 'agents'} still running` : ''
-    const footer = c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}${still}` : `Stopped · ${counts}${time}${still}`
-    return { title: c.title, filled: 0, rows: [], footer }
+  // Background agents outlive the turn: the card stays open on them until they all finish, then collapses
+  const running = agents.filter(a => isRunning(statusById[a.id])).length
+  const isClosed = c.endedAt !== undefined
+  if (isClosed && !running) {
+    return { title: c.title, filled: 0, rows: [], footer: c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}${filesText(c)}` : `Stopped · ${counts}${time}${filesText(c)}` }
   }
-  const agents = summary && { text: summary.text, hasFailed: summary.hasFailed }
-  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...(agents ? { agents } : {}) }
+  const waiting = isClosed ? { footer: `Waiting for ${running} ${running === 1 ? 'agent' : 'agents'} · ${time}` } : {}
+
+  const taskIds = new Set(c.tasks.map(t => t.id))
+  const loose = agents.filter(a => a.taskId === undefined || !taskIds.has(a.taskId))
+  const group = loose.length ? { group: agentGroup(loose, statusById, accent, spin) } : {}
+  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `${c.activity ?? 'Working…'} ${time}`, ...group, ...waiting }
 
   const working = c.tasks.findIndex(t => t.status === 'in_progress')
   const next = c.tasks.findIndex((t, i) => t.status === 'pending' && i > working)
-  const rows = c.tasks.map((t, i): CardRow =>
-    t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green' }
-      : t.status === 'in_progress' ? { mark: '●', subject: t.subject, label: 'Working', color: accent, isBold: true }
-        : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true })
+  const rows = c.tasks.map((t, i): CardRow => {
+    const own = agents.filter(a => a.taskId === t.id)
+    const isWorking = t.status === 'in_progress'
+    const showsAgents = own.length > 0 && (isWorking || own.some(a => isRunning(statusById[a.id])))
+    const taskGroup = showsAgents ? { group: agentGroup(own, statusById, accent, spin) }
+      : isWorking ? { group: { cells: shimmer(frame), ...(c.activity ? { label: c.activity } : {}), agents: [], more: 0 } } : {}
+    return t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green', ...taskGroup }
+      : isWorking ? { mark: spin, subject: t.subject, label: 'Working', color: accent, isBold: true, ...taskGroup }
+        : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true }
+  })
 
   return {
     title: c.title,
     step: `Step ${working >= 0 ? working + 1 : done} of ${total}`,
     filled: Math.round((done / total) * BAR_CELLS),
     rows,
-    ...(agents ? { agents: { ...agents, ...(working >= 0 ? { afterRow: working } : {}) } } : {}),
+    ...group,
+    ...waiting,
   }
 }
 
@@ -146,8 +232,12 @@ export const turnOutcome = (e: { reason: string; isAborted: boolean; agentId?: s
 // After an error or refusal the person needs to see why Claude stopped; Esc is their own choice
 export const revealsNotes = (e: { reason: string }) => e.reason === 'error' || e.reason === 'refusal'
 
-// A continuation turn ("" text) belongs to the request already on the card
-export const startsCard = (text: string) => text.trim().length > 0
+// Only the person's own prompt opens a card. Agent reports, agent messages and other deliveries start turns too
+// (their text is engine-made, like <task-notification>), and they carry on the request already on the card.
+// A prompt typed mid-turn (turnId set) joins the running turn, so its card goes on as well.
+const PERSON = ['composer', 'bridge']
+export const startsCard = (e: { text: string; origin: { kind: string }; turnId?: string }) =>
+  PERSON.includes(e.origin.kind) && e.turnId === undefined && e.text.trim().length > 0
 
 type HistoryMessage = { role: 'user' | 'assistant'; text: string; toolResults?: readonly unknown[] }
 

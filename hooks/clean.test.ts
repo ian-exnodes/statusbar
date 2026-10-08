@@ -3,7 +3,8 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
-  agentSpawned, agentsSummary, reopened,
+  agentSpawned, reopened, shimmer, SPINNER, TASK_CELLS,
+  activityOf, activitySet, fileChanged, trailLine, trailFor,
 } from './clean'
 
 const start = startChecklist('Build a weather dashboard for New York with live data and a shareable link', 0)
@@ -36,7 +37,7 @@ describe('clean view', () => {
     const k = card(c, 60_000, 'magenta')
     expect(k.step).toBe('Step 2 of 4')
     expect(k.filled).toBe(5)
-    expect(k.rows.map(r => `${r.mark} ${r.label}`)).toEqual(['✓ Done', '● Working', '○ Next', '○ Up next'])
+    expect(k.rows.map(r => `${r.mark} ${r.label}`)).toEqual(['✓ Done', `${SPINNER[0]} Working`, '○ Next', '○ Up next'])
     expect(k.rows[0]?.color).toBe('green')
     expect(k.rows[1]?.color).toBe('magenta')
     expect(k.rows[1]?.isBold).toBe(true)
@@ -120,9 +121,15 @@ describe('clean view', () => {
     expect(revealsNotes({ reason: 'aborted' })).toBe(false)
   })
 
-  test('a continuation turn with no typed text keeps the card', async () => {
-    expect(startsCard('Build the page')).toBe(true)
-    expect(startsCard('   ')).toBe(false)
+  test('only a prompt the person sent opens a card; agent reports and messages carry on the one there', async () => {
+    expect(startsCard({ text: 'Build the page', origin: { kind: 'composer' } })).toBe(true)
+    expect(startsCard({ text: 'Build the page', origin: { kind: 'bridge' } })).toBe(true)
+    expect(startsCard({ text: '   ', origin: { kind: 'composer' } })).toBe(false)
+    expect(startsCard({ text: '<task-notification>…', origin: { kind: 'task-notification' } })).toBe(false)
+    expect(startsCard({ text: '<agent-message from="ac27">…', origin: { kind: 'unclassified' } })).toBe(false)
+    expect(startsCard({ text: 'hi', origin: { kind: 'peer-send-message' } })).toBe(false)
+    // Typed while Claude works: it joins the running turn, so the card of that turn goes on
+    expect(startsCard({ text: 'also add tests', origin: { kind: 'composer' }, turnId: 'turn-1' })).toBe(false)
   })
 
   test("a resumed session's final answers come from its history", async () => {
@@ -139,39 +146,135 @@ describe('clean view', () => {
     expect(finalsFromMessages(history)).toEqual(['Both files have 3 lines.', 'Sorted.'])
   })
 
-  test('agents are summed up: running, done, failed', async () => {
-    expect(agentsSummary([])).toBeUndefined()
-    expect(agentsSummary(['running'])?.text).toBe('1 agent: running')
-    expect(agentsSummary(['completed', 'idle', 'waiting'])?.text).toBe('3 agents: 2 done, 1 running')
-    expect(agentsSummary(['completed', 'completed'])?.text).toBe('2 agents: done')
-    const failed = agentsSummary(['completed', 'failed', 'killed', 'pending'])
-    expect(failed?.text).toBe('4 agents: 1 done, 1 running, 2 failed')
-    expect(failed?.hasFailed).toBe(true)
-    expect(failed?.running).toBe(1)
-  })
-
-  test('a spawned agent joins the card once', async () => {
-    const c = agentSpawned(agentSpawned(four, 'a1'), 'a1')
-    expect(agentSpawned(c, 'a2').agentIds).toEqual(['a1', 'a2'])
-  })
-
-  test('the agent line sits under the working task, or under the title without one', async () => {
+  test('the working task animates: its mark spins and a bar slides back and forth', async () => {
     const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
-    const k = card(working, 0, 'blue', ['running', 'completed'])
-    expect(k.agents).toEqual({ text: '2 agents: 1 done, 1 running', hasFailed: false, afterRow: 1 })
-    expect(card(start, 0, 'blue', ['running']).agents?.afterRow).toBeUndefined()
-    expect(card(four, 0, 'blue').agents).toBeUndefined()
+    expect(card(working, 0, 'blue', {}, 3).rows[1]?.mark).toBe(SPINNER[3])
+    expect(card(working, 0, 'blue', {}, SPINNER.length).rows[1]?.mark).toBe(SPINNER[0])
+    expect(shimmer(0)).toBe('▰▰▰▱▱▱▱▱▱▱▱▱')
+    expect(shimmer(2)).toBe('▱▱▰▰▰▱▱▱▱▱▱▱')
+    expect(shimmer(9)).toBe('▱▱▱▱▱▱▱▱▱▰▰▰')
+    expect(shimmer(10)).toBe('▱▱▱▱▱▱▱▱▰▰▰▱')
+    expect(shimmer(18)).toBe(shimmer(0))
+    expect(shimmer(5).length).toBe(TASK_CELLS)
+    // No agents under it: motion only, never a made-up %
+    const group = card(working, 0, 'blue', {}, 2).rows[1]?.group
+    expect(group).toEqual({ cells: shimmer(2), agents: [], more: 0 })
+    expect(card(working, 0, 'blue').rows[0]?.group).toBeUndefined()
   })
 
-  test('a card closed while agents still run says so; a continuation re-opens it', async () => {
+  test('a spawned agent joins the card once, under the task in progress', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = agentSpawned(agentSpawned(working, 'a1', 'security review'), 'a1', 'security review')
+    expect(c.agents).toEqual([{ id: 'a1', description: 'security review', taskId: 't1' }])
+    expect(agentSpawned(four, 'a2', 'look around').agents).toEqual([{ id: 'a2', description: 'look around' }])
+  })
+
+  test('agents under a task: a row each and a real % of those finished', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = ['security review', 'performance review', 'test coverage review']
+      .reduce((x, d, i) => agentSpawned(x, `a${i}`, d), working)
+    const group = card(c, 0, 'blue', { a0: 'completed', a1: 'running' }, 1).rows[1]?.group
+    expect(group?.label).toBe('1 of 3 · 33%')
+    expect(group?.cells).toBe('▰▰▰▰▱▱▱▱▱▱▱▱')
+    expect(group?.agents.map(a => `${a.mark} ${a.subject} ${a.label}`)).toEqual([
+      '✓ security review Done', `${SPINNER[1]} performance review Running`, `${SPINNER[1]} test coverage review Running`,
+    ])
+    expect(group?.agents[0]?.color).toBe('green')
+    expect(group?.agents[1]?.color).toBe('blue')
+  })
+
+  test('failed agents count as finished and show in red', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = ['one', 'two'].reduce((x, d, i) => agentSpawned(x, `a${i}`, d), working)
+    const group = card(c, 0, 'blue', { a0: 'idle', a1: 'killed' }).rows[1]?.group
+    expect(group?.label).toBe('2 of 2 · 100% · 1 failed')
+    expect(group?.color).toBe('red')
+    expect(group?.agents[1]).toEqual({ mark: '✗', subject: 'two', label: 'Failed', color: 'red' })
+  })
+
+  test('more than 5 agents: the rest are counted, not listed', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = Array.from({ length: 8 }, (_, i) => i).reduce((x, i) => agentSpawned(x, `a${i}`, `agent ${i}`), working)
+    const group = card(c, 0, 'blue').rows[1]?.group
+    expect(group?.agents.length).toBe(5)
+    expect(group?.more).toBe(3)
+    expect(group?.label).toBe('0 of 8 · 0%')
+  })
+
+  test('agents stay under a finished task while they still run; agents with no task sit under the title', async () => {
+    const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
+    const c = taskUpdated(agentSpawned(working, 'a0', 'background check'), { taskId: 't1', status: 'completed' })
+    expect(card(c, 0, 'blue', { a0: 'running' }).rows[1]?.group?.agents.length).toBe(1)
+    expect(card(c, 0, 'blue', { a0: 'completed' }).rows[1]?.group).toBeUndefined()
+    const loose = agentSpawned(start, 'a9', 'look around')
+    expect(card(loose, 0, 'blue').group?.agents.map(a => a.subject)).toEqual(['look around'])
+    expect(card(loose, 0, 'blue').footer).toBe('Working… 0s')
+    expect(card(four, 0, 'blue').group).toBeUndefined()
+  })
+
+  test('a turn that ends while agents still run keeps the card open, waiting for them', async () => {
+    const working = taskUpdated(taskUpdated(four, { taskId: 't0', status: 'completed' }), { taskId: 't1', status: 'in_progress' })
+    const closed = turnEnded(['x', 'y', 'z'].reduce((c, d, i) => agentSpawned(c, `a${i}`, d), working), 12_000, 'answer')
+    const waiting = card(closed, 0, 'blue', { a0: 'completed' }, 1)
+    expect(waiting.footer).toBe('Waiting for 2 agents · 12s')
+    expect(waiting.step).toBe('Step 2 of 4')
+    expect(waiting.rows[1]?.group?.label).toBe('1 of 3 · 33%')
+    expect(waiting.rows[1]?.group?.agents.map(a => a.label)).toEqual(['Done', 'Running', 'Running'])
+    expect(card(closed, 0, 'blue', { a0: 'completed', a1: 'idle', a2: 'running' }).footer).toBe('Waiting for 1 agent · 12s')
+  })
+
+  test('once its agents finish, a closed card collapses to its done line; a continuation re-opens it', async () => {
     const all = four.tasks.reduce((c, t) => taskUpdated(c, { taskId: t.id, status: 'completed' }), four)
-    const closed = turnEnded(all, 192_000, 'answer')
-    expect(card(closed, 0, 'blue', ['running', 'completed']).footer).toBe('✓ 4 of 4 done · 3m · 1 agent still running')
-    expect(card(closed, 0, 'blue', ['completed']).footer).toBe('✓ 4 of 4 done · 3m')
+    const closed = turnEnded(agentSpawned(agentSpawned(all, 'a0', 'x'), 'a1', 'y'), 192_000, 'answer')
+    expect(card(closed, 0, 'blue', { a0: 'completed', a1: 'idle' })).toEqual({ title: closed.title, filled: 0, rows: [], footer: '✓ 4 of 4 done · 3m' })
+    expect(card(turnEnded(four, 5_000, 'stopped'), 0, 'blue').footer).toBe('Stopped · 0 of 4 done · 5s')
     const open = reopened(closed)
     expect(open.endedAt).toBeUndefined()
     expect(open.outcome).toBeUndefined()
-    expect(card(open, 200_000, 'blue').footer).toBeUndefined()
+    expect(card(open, 200_000, 'blue', { a0: 'completed', a1: 'idle' }).footer).toBeUndefined()
+  })
+
+  test('each tool call reads as a plain-language activity', async () => {
+    expect(activityOf('Read', { file_path: '/a/b.ts' })).toBe('Reading files…')
+    expect(activityOf('Grep', {})).toBe('Reading files…')
+    expect(activityOf('Edit', { file_path: '/x/hooks/register.tsx' })).toBe('Editing register.tsx…')
+    expect(activityOf('Write', { file_path: 'notes.md' })).toBe('Editing notes.md…')
+    expect(activityOf('Bash', { command: 'ls' })).toBe('Running a command…')
+    expect(activityOf('Agent', {})).toBe('Starting helpers…')
+    expect(activityOf('WebSearch', {})).toBe('Looking things up…')
+    expect(activityOf('mcp__figma__get_screenshot', {})).toBe('Using figma…')
+    expect(activityOf('SomethingNew', {})).toBe('Working…')
+    // Bookkeeping calls keep the activity that was there
+    expect(activityOf('mcp__statusbar__checklist', {})).toBeUndefined()
+    expect(activityOf('ToolSearch', {})).toBeUndefined()
+    expect(activityOf('TodoWrite', {})).toBeUndefined()
+  })
+
+  test('the activity replaces Working… and labels the sliding bar', async () => {
+    expect(card(activitySet(start, 'Reading files…'), 45_000, 'blue').footer).toBe('Reading files… 45s')
+    const working = activitySet(taskUpdated(four, { taskId: 't1', status: 'in_progress' }), 'Running a command…')
+    expect(card(working, 0, 'blue').rows[1]?.group?.label).toBe('Running a command…')
+    expect(activitySet(start, undefined)).toEqual(start)
+  })
+
+  test('files changed are counted once each and shown when the card closes', async () => {
+    const c = ['/a.ts', '/b.ts', '/a.ts'].reduce(fileChanged, four)
+    expect(c.files).toEqual(['/a.ts', '/b.ts'])
+    const all = c.tasks.reduce((x, t) => taskUpdated(x, { taskId: t.id, status: 'completed' }), c)
+    expect(card(turnEnded(all, 120_000, 'answer'), 0, 'blue').footer).toBe('✓ 4 of 4 done · 2m · 2 files changed')
+    expect(card(turnEnded(fileChanged(start, '/a.ts'), 5_000, 'answer'), 0, 'blue').footer).toBe('✓ Done · 5s · 1 file changed')
+    expect(card(turnEnded(four, 5_000, 'stopped'), 0, 'blue').footer).toBe('Stopped · 0 of 4 done · 5s')
+  })
+
+  test('a trail line sums up each finished request above its answer', async () => {
+    const all = fileChanged(four.tasks.reduce((c, t) => taskUpdated(c, { taskId: t.id, status: 'completed' }), four), '/a.ts')
+    expect(trailLine(turnEnded(all, 120_000, 'answer'))).toBe('✓ Build a weather dashboard for New York with… · 4 of 4 done · 2m · 1 file changed')
+    expect(trailLine(turnEnded(start, 3_000, 'stopped'))).toBe('Stopped · Build a weather dashboard for New York with… · 3s')
+    const trails = [{ answer: 'First answer\n\nSecond part', line: 'L1' }, { answer: 'Other', line: 'L2' }]
+    expect(trailFor('First answer', trails)).toBe('L1')
+    // Only above the answer's first block, not each block of it
+    expect(trailFor('Second part', trails)).toBeUndefined()
+    expect(trailFor('Nothing', trails)).toBeUndefined()
   })
 
   test('only the last 50 final answers are kept', async () => {
