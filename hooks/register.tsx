@@ -5,7 +5,7 @@ import type { CardGroup } from './clean'
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  agentSpawned, finalsFromMessages, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
+  agentSpawned, finalsFromMessages, isRunning, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -114,7 +114,7 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
           {row.group && groupRows(row.group, `group${i}`)}
         </Box>
       ))}
-      {k.footer && <Text color={c.outcome === 'answer' ? 'green' : undefined} dimColor={c.outcome !== 'answer'}>{k.footer}</Text>}
+      {k.footer && <Text color={k.footer.startsWith('✓') ? 'green' : undefined} dimColor={!k.footer.startsWith('✓')}>{k.footer}</Text>}
     </Box>
   )
 }
@@ -193,8 +193,9 @@ async function tick($: EngineInterface) {
 
 // Moves the card's frame on only while something on it moves, so an idle session does not redraw
 async function animate($: EngineInterface) {
-  const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
-  const isMoving = c !== null && c.endedAt === undefined && (c.tasks.some(t => t.status === 'in_progress') || !!c.agents?.length)
+  const [isOn, c, statusById] = await Promise.all([read($, cleanView), read($, checklist), read($, agentStatus)])
+  const hasRunning = !!c?.agents?.some(a => isRunning(statusById[a.id]))
+  const isMoving = c !== null && (hasRunning || (c.endedAt === undefined && c.tasks.some(t => t.status === 'in_progress')))
   if (isOn && isMoving) await update($, frame, n => n + 1)
 }
 

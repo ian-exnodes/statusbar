@@ -59,7 +59,7 @@ export type Card = { title: string; step?: string; filled: number; rows: CardRow
 // Agent statuses as $.agent.list() reports them; one not listed yet has only just been spawned
 const DONE = ['completed', 'idle']
 const FAILED = ['failed', 'killed']
-const isRunning = (status: string | undefined) => !DONE.includes(status ?? '') && !FAILED.includes(status ?? '')
+export const isRunning = (status: string | undefined) => !DONE.includes(status ?? '') && !FAILED.includes(status ?? '')
 
 // The agent joins the task in progress when it starts, so parallel tasks keep their own agents
 export const agentSpawned = (c: CleanChecklist, id: string, description: string): CleanChecklist => {
@@ -110,17 +110,18 @@ export const card = (
   const agents = c.agents ?? []
   const spin = SPINNER[frame % SPINNER.length] ?? '●'
 
-  if (c.endedAt !== undefined) {
-    const running = agents.filter(a => isRunning(statusById[a.id])).length
-    const still = running ? ` · ${running} ${running === 1 ? 'agent' : 'agents'} still running` : ''
-    const footer = c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}${still}` : `Stopped · ${counts}${time}${still}`
-    return { title: c.title, filled: 0, rows: [], footer }
+  // Background agents outlive the turn: the card stays open on them until they all finish, then collapses
+  const running = agents.filter(a => isRunning(statusById[a.id])).length
+  const isClosed = c.endedAt !== undefined
+  if (isClosed && !running) {
+    return { title: c.title, filled: 0, rows: [], footer: c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}` : `Stopped · ${counts}${time}` }
   }
+  const waiting = isClosed ? { footer: `Waiting for ${running} ${running === 1 ? 'agent' : 'agents'} · ${time}` } : {}
 
   const taskIds = new Set(c.tasks.map(t => t.id))
   const loose = agents.filter(a => a.taskId === undefined || !taskIds.has(a.taskId))
   const group = loose.length ? { group: agentGroup(loose, statusById, accent, spin) } : {}
-  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...group }
+  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...group, ...waiting }
 
   const working = c.tasks.findIndex(t => t.status === 'in_progress')
   const next = c.tasks.findIndex((t, i) => t.status === 'pending' && i > working)
@@ -141,6 +142,7 @@ export const card = (
     filled: Math.round((done / total) * BAR_CELLS),
     rows,
     ...group,
+    ...waiting,
   }
 }
 
@@ -184,8 +186,9 @@ export const turnOutcome = (e: { reason: string; isAborted: boolean; agentId?: s
 // After an error or refusal the person needs to see why Claude stopped; Esc is their own choice
 export const revealsNotes = (e: { reason: string }) => e.reason === 'error' || e.reason === 'refusal'
 
-// A continuation turn ("" text) belongs to the request already on the card
-export const startsCard = (text: string) => text.trim().length > 0
+// A continuation turn belongs to the request already on the card: "" text, or a background agent reporting back.
+// ponytail: matched on the notification's text, since turn.start carries no origin; switch if it gets one
+export const startsCard = (text: string) => text.trim().length > 0 && !text.trimStart().startsWith('<task-notification>')
 
 type HistoryMessage = { role: 'user' | 'assistant'; text: string; toolResults?: readonly unknown[] }
 

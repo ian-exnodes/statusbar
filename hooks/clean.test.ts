@@ -123,6 +123,7 @@ describe('clean view', () => {
   test('a continuation turn with no typed text keeps the card', async () => {
     expect(startsCard('Build the page')).toBe(true)
     expect(startsCard('   ')).toBe(false)
+    expect(startsCard('<task-notification>\n<task-id>a1</task-id> completed')).toBe(false)
   })
 
   test("a resumed session's final answers come from its history", async () => {
@@ -205,11 +206,22 @@ describe('clean view', () => {
     expect(card(four, 0, 'blue').group).toBeUndefined()
   })
 
-  test('a card closed while agents still run says so; a continuation re-opens it', async () => {
+  test('a turn that ends while agents still run keeps the card open, waiting for them', async () => {
+    const working = taskUpdated(taskUpdated(four, { taskId: 't0', status: 'completed' }), { taskId: 't1', status: 'in_progress' })
+    const closed = turnEnded(['x', 'y', 'z'].reduce((c, d, i) => agentSpawned(c, `a${i}`, d), working), 12_000, 'answer')
+    const waiting = card(closed, 0, 'blue', { a0: 'completed' }, 1)
+    expect(waiting.footer).toBe('Waiting for 2 agents · 12s')
+    expect(waiting.step).toBe('Step 2 of 4')
+    expect(waiting.rows[1]?.group?.label).toBe('1 of 3 · 33%')
+    expect(waiting.rows[1]?.group?.agents.map(a => a.label)).toEqual(['Done', 'Running', 'Running'])
+    expect(card(closed, 0, 'blue', { a0: 'completed', a1: 'idle', a2: 'running' }).footer).toBe('Waiting for 1 agent · 12s')
+  })
+
+  test('once its agents finish, a closed card collapses to its done line; a continuation re-opens it', async () => {
     const all = four.tasks.reduce((c, t) => taskUpdated(c, { taskId: t.id, status: 'completed' }), four)
     const closed = turnEnded(agentSpawned(agentSpawned(all, 'a0', 'x'), 'a1', 'y'), 192_000, 'answer')
-    expect(card(closed, 0, 'blue', { a0: 'running', a1: 'completed' }).footer).toBe('✓ 4 of 4 done · 3m · 1 agent still running')
-    expect(card(closed, 0, 'blue', { a0: 'completed', a1: 'idle' }).footer).toBe('✓ 4 of 4 done · 3m')
+    expect(card(closed, 0, 'blue', { a0: 'completed', a1: 'idle' })).toEqual({ title: closed.title, filled: 0, rows: [], footer: '✓ 4 of 4 done · 3m' })
+    expect(card(turnEnded(four, 5_000, 'stopped'), 0, 'blue').footer).toBe('Stopped · 0 of 4 done · 5s')
     const open = reopened(closed)
     expect(open.endedAt).toBeUndefined()
     expect(open.outcome).toBeUndefined()

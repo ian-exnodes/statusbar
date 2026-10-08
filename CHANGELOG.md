@@ -25,6 +25,14 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 - The `↳ 3 agents: 2 done, 1 running` line is replaced by those rows. Agents still running keep their rows under a
   task marked done.
 
+### Fixed
+
+- A turn that ends while background agents still run no longer collapses the card to `✓ 1 of 2 done · … still
+  running`: the card stays open on the agents' rows with `Waiting for 3 agents · 12s`, and collapses to its done
+  line once they all finish.
+- A background agent reporting back no longer starts a new card titled `<task-notification>`; the card of the
+  request carries on.
+
 ## 0.8.1 (2026-10-06)
 
 ### Added
