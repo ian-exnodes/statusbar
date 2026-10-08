@@ -20,6 +20,10 @@ export type CleanChecklist = {
   outcome?: 'answer' | 'stopped'
   /** Helper agents the main conversation started for this request. */
   agents?: CleanAgent[]
+  /** What Claude is doing now, from its last tool call ("Editing register.tsx…"). */
+  activity?: string
+  /** Files edited or written for this request, once each. */
+  files?: string[]
 }
 
 export type StatusFigures = {
@@ -57,6 +61,7 @@ declare module 'claude-code' {
       finals: string[]
       showNotes: boolean
       nextCard: string | null
+      trails: { answer: string; line: string }[]
       agentStatus: Record<string, string>
       frame: number
     }

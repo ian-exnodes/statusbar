@@ -4,6 +4,7 @@ import {
   CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
   agentSpawned, reopened, shimmer, SPINNER, TASK_CELLS,
+  activityOf, activitySet, fileChanged, trailLine, trailFor,
 } from './clean'
 
 const start = startChecklist('Build a weather dashboard for New York with live data and a shareable link', 0)
@@ -231,6 +232,49 @@ describe('clean view', () => {
     expect(open.endedAt).toBeUndefined()
     expect(open.outcome).toBeUndefined()
     expect(card(open, 200_000, 'blue', { a0: 'completed', a1: 'idle' }).footer).toBeUndefined()
+  })
+
+  test('each tool call reads as a plain-language activity', async () => {
+    expect(activityOf('Read', { file_path: '/a/b.ts' })).toBe('Reading files…')
+    expect(activityOf('Grep', {})).toBe('Reading files…')
+    expect(activityOf('Edit', { file_path: '/x/hooks/register.tsx' })).toBe('Editing register.tsx…')
+    expect(activityOf('Write', { file_path: 'notes.md' })).toBe('Editing notes.md…')
+    expect(activityOf('Bash', { command: 'ls' })).toBe('Running a command…')
+    expect(activityOf('Agent', {})).toBe('Starting helpers…')
+    expect(activityOf('WebSearch', {})).toBe('Looking things up…')
+    expect(activityOf('mcp__figma__get_screenshot', {})).toBe('Using figma…')
+    expect(activityOf('SomethingNew', {})).toBe('Working…')
+    // Bookkeeping calls keep the activity that was there
+    expect(activityOf('mcp__statusbar__checklist', {})).toBeUndefined()
+    expect(activityOf('ToolSearch', {})).toBeUndefined()
+    expect(activityOf('TodoWrite', {})).toBeUndefined()
+  })
+
+  test('the activity replaces Working… and labels the sliding bar', async () => {
+    expect(card(activitySet(start, 'Reading files…'), 45_000, 'blue').footer).toBe('Reading files… 45s')
+    const working = activitySet(taskUpdated(four, { taskId: 't1', status: 'in_progress' }), 'Running a command…')
+    expect(card(working, 0, 'blue').rows[1]?.group?.label).toBe('Running a command…')
+    expect(activitySet(start, undefined)).toEqual(start)
+  })
+
+  test('files changed are counted once each and shown when the card closes', async () => {
+    const c = ['/a.ts', '/b.ts', '/a.ts'].reduce(fileChanged, four)
+    expect(c.files).toEqual(['/a.ts', '/b.ts'])
+    const all = c.tasks.reduce((x, t) => taskUpdated(x, { taskId: t.id, status: 'completed' }), c)
+    expect(card(turnEnded(all, 120_000, 'answer'), 0, 'blue').footer).toBe('✓ 4 of 4 done · 2m · 2 files changed')
+    expect(card(turnEnded(fileChanged(start, '/a.ts'), 5_000, 'answer'), 0, 'blue').footer).toBe('✓ Done · 5s · 1 file changed')
+    expect(card(turnEnded(four, 5_000, 'stopped'), 0, 'blue').footer).toBe('Stopped · 0 of 4 done · 5s')
+  })
+
+  test('a trail line sums up each finished request above its answer', async () => {
+    const all = fileChanged(four.tasks.reduce((c, t) => taskUpdated(c, { taskId: t.id, status: 'completed' }), four), '/a.ts')
+    expect(trailLine(turnEnded(all, 120_000, 'answer'))).toBe('✓ Build a weather dashboard for New York with… · 4 of 4 done · 2m · 1 file changed')
+    expect(trailLine(turnEnded(start, 3_000, 'stopped'))).toBe('Stopped · Build a weather dashboard for New York with… · 3s')
+    const trails = [{ answer: 'First answer\n\nSecond part', line: 'L1' }, { answer: 'Other', line: 'L2' }]
+    expect(trailFor('First answer', trails)).toBe('L1')
+    // Only above the answer's first block, not each block of it
+    expect(trailFor('Second part', trails)).toBeUndefined()
+    expect(trailFor('Nothing', trails)).toBeUndefined()
   })
 
   test('only the last 50 final answers are kept', async () => {

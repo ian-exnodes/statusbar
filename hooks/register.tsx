@@ -1,11 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { BuiltinToolResults, EngineInterface, Register, RenderInput, ResolveInput } from 'claude-code'
 
-import type { CardGroup } from './clean'
+import type { CardGroup, Trail } from './clean'
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  agentSpawned, finalsFromMessages, isRunning, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
+  agentSpawned, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -32,7 +32,10 @@ const setCleanView = async ($: EngineInterface, isOn: boolean) => {
 const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
 // Set when a turn ends in an error or refusal: Claude's rows show until the next request, so the reason is visible
+// Also the card's Details button: Claude's hidden rows show while it is set
 const showNotes = atom({ plugin: 'statusbar', key: 'showNotes' } as const, false)
+// The trail line drawn above each final answer of this session (last 50)
+const trails = atom({ plugin: 'statusbar', key: 'trails' } as const, [])
 // The person's prompt, from prompt.submit (which knows the origin) to the turn.start that follows it
 const nextCard = atom({ plugin: 'statusbar', key: 'nextCard' } as const, null)
 // The latest status of each helper agent on the card, read from $.agent.list() on the 1s tick
@@ -45,6 +48,12 @@ const FRAME_MS = 150
 const empty = ($: EngineInterface, e: ResolveInput) => {
   const { Box } = $.ui.resolve(e)
   return <Box />
+}
+
+// Claude's work rows hide while Clean View is on, unless the card's Details shows them
+const hidesRows = async ($: EngineInterface) => {
+  const [isOn, isRevealed] = await Promise.all([read($, cleanView), read($, showNotes)])
+  return isOn && !isRevealed
 }
 
 const loadCleanView = async ($: EngineInterface) => {
@@ -65,14 +74,21 @@ const endCleanTurn = async (
   if (!(await read($, cleanView))) return
   const now = await $.clock.now()
   await update($, checklist, c => c && c.endedAt === undefined ? turnEnded(c, now, outcome) : c)
+  const c = await read($, checklist)
+  if (c !== null && e.answer.trim()) {
+    const trail: Trail = { answer: e.answer, line: trailLine(c.endedAt === undefined ? turnEnded(c, now, outcome) : c) }
+    await update($, trails, list => [...list, trail].slice(-50))
+  }
 }
 
 // The Clean View card for the band above the prompt, or null while there is none to show
 const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
-  const [isOn, c, f, statusById] = await Promise.all([read($, cleanView), read($, checklist), read($, figures), read($, agentStatus)])
+  const [isOn, c, f, statusById, isRevealed] = await Promise.all([
+    read($, cleanView), read($, checklist), read($, figures), read($, agentStatus), read($, showNotes),
+  ])
   if (!isOn || c === null || e.props.hasSurvey) return null
 
-  const { Box, Text } = $.ui.resolve(e)
+  const { Box, Text, Button } = $.ui.resolve(e)
   const accent = modelColor(f?.model ?? '')
   const k = card(c, await $.clock.now(), accent, statusById, await read($, frame))
 
@@ -96,7 +112,13 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1}>
-      <Text bold><Text color={accent}>✧ </Text>{k.title}</Text>
+      <Box>
+        <Box flexGrow={1}><Text bold><Text color={accent}>✧ </Text>{k.title}</Text></Box>
+        <Box key="details">
+          <Button key="details" plain label={isRevealed ? '[ Hide details ]' : '[ Details ]'} hover={{ inverse: true }}
+            onPress={() => void update($, showNotes, shown => !shown)} />
+        </Box>
+      </Box>
       {k.step && (
         <Box>
           <Box width={14}><Text>{k.step}</Text></Box>
@@ -212,6 +234,8 @@ export const register: Register = on => {
     await $.tool.register({
       name: 'checklist',
       description: "Shows the person your plan as a checklist while Clean View is on. Send the whole list each call.",
+      // In the prompt's tool list, so Claude calls it without a ToolSearch first
+      isDeferred: false,
       inputSchema: {
         type: 'object',
         properties: {
@@ -438,15 +462,38 @@ export const register: Register = on => {
     return r
   })
 
+  // Every tool call: the card's activity line (main loop) and the files changed (helper agents' edits count too)
+  on('tool.call', async ($, e, next) => {
+    const isOn = await read($, cleanView)
+    if (isOn && e.agentId === undefined) await update($, checklist, c => c && activitySet(c, activityOf(e.tool, e)))
+    const r = await next(e)
+    if (!isOn) return r
+    const path = (e as { file_path?: unknown }).file_path
+    if (r.deny === undefined && !r.isError && ['Edit', 'Write', 'NotebookEdit'].includes(e.tool) && typeof path === 'string') {
+      await update($, checklist, c => c && fileChanged(c, path))
+    }
+    return r
+  })
+
   // Drawing only: the stored transcript is untouched, so switching Clean View off shows every row again
-  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
-  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
-  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
-  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await read($, cleanView)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    const [isOn, list, isRevealed] = await Promise.all([read($, cleanView), read($, finals), read($, showNotes)])
-    if (!isOn || isRevealed || isFinalAnswer(e.props.text, list)) return next(e)
-    return empty($, e)
+    const [isOn, list, isRevealed, trailList] = await Promise.all([read($, cleanView), read($, finals), read($, showNotes), read($, trails)])
+    if (!isOn) return next(e)
+    if (!isRevealed && !isFinalAnswer(e.props.text, list)) return empty($, e)
+    // The request's trail line sits above its final answer
+    const line = trailFor(e.props.text, trailList)
+    if (line === undefined) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="column">
+        <Text dimColor>{line}</Text>
+        {await next(e)}
+      </Box>
+    )
   })
 }

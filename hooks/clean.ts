@@ -100,13 +100,59 @@ const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<s
   }
 }
 
+// What Claude is doing, in the person's words; undefined for bookkeeping calls, which keep the activity there
+const QUIET = ['ToolSearch', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite']
+export const activityOf = (tool: string, input: object): string | undefined => {
+  const path = (input as { file_path?: unknown }).file_path
+  if (QUIET.includes(tool) || tool.startsWith('mcp__statusbar__')) return undefined
+  if (['Read', 'Grep', 'Glob', 'LSP'].includes(tool)) return 'Reading files…'
+  if (['Edit', 'Write', 'NotebookEdit'].includes(tool)) {
+    return typeof path === 'string' ? `Editing ${path.split('/').pop()}…` : 'Editing files…'
+  }
+  if (tool === 'Bash') return 'Running a command…'
+  if (tool === 'Agent') return 'Starting helpers…'
+  if (tool === 'WebFetch' || tool === 'WebSearch') return 'Looking things up…'
+  if (tool === 'AskUserQuestion') return 'Asking you a question…'
+  const server = /^mcp__([^_]+(?:_[^_]+)*?)__/.exec(tool)?.[1]
+  return server ? `Using ${server}…` : 'Working…'
+}
+
+export const activitySet = (c: CleanChecklist, activity: string | undefined): CleanChecklist =>
+  activity === undefined ? c : { ...c, activity }
+
+export const fileChanged = (c: CleanChecklist, path: string): CleanChecklist =>
+  c.files?.includes(path) ? c : { ...c, files: [...(c.files ?? []), path] }
+
+const filesText = (c: CleanChecklist) =>
+  c.files?.length ? ` · ${c.files.length} ${c.files.length === 1 ? 'file' : 'files'} changed` : ''
+
+const countsText = (c: CleanChecklist) => {
+  const done = c.tasks.filter(t => t.status === 'completed').length
+  return c.tasks.length ? `${done} of ${c.tasks.length} done · ` : ''
+}
+
+// One dim line above the request's final answer, so scrolling back shows what each request did
+export const trailLine = (c: CleanChecklist) => {
+  const time = elapsed((c.endedAt ?? c.startedAt) - c.startedAt)
+  return c.outcome === 'answer'
+    ? `✓ ${c.title} · ${countsText(c)}${time}${filesText(c)}`
+    : `Stopped · ${c.title} · ${countsText(c)}${time}${filesText(c)}`
+}
+
+export type Trail = { answer: string; line: string }
+// Only above the answer's first block: the terminal draws a reply in blocks
+export const trailFor = (text: string, trails: readonly Trail[]) => {
+  const block = text.trim()
+  return block ? trails.find(t => t.answer.trimStart().startsWith(block))?.line : undefined
+}
+
 export const card = (
   c: CleanChecklist, now: number, accent: string, statusById: Readonly<Record<string, string>> = {}, frame = 0,
 ): Card => {
   const total = c.tasks.length
   const done = c.tasks.filter(t => t.status === 'completed').length
   const time = elapsed((c.endedAt ?? now) - c.startedAt)
-  const counts = total ? `${done} of ${total} done · ` : ''
+  const counts = countsText(c)
   const agents = c.agents ?? []
   const spin = SPINNER[frame % SPINNER.length] ?? '●'
 
@@ -114,14 +160,14 @@ export const card = (
   const running = agents.filter(a => isRunning(statusById[a.id])).length
   const isClosed = c.endedAt !== undefined
   if (isClosed && !running) {
-    return { title: c.title, filled: 0, rows: [], footer: c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}` : `Stopped · ${counts}${time}` }
+    return { title: c.title, filled: 0, rows: [], footer: c.outcome === 'answer' ? `✓ ${counts || 'Done · '}${time}${filesText(c)}` : `Stopped · ${counts}${time}${filesText(c)}` }
   }
   const waiting = isClosed ? { footer: `Waiting for ${running} ${running === 1 ? 'agent' : 'agents'} · ${time}` } : {}
 
   const taskIds = new Set(c.tasks.map(t => t.id))
   const loose = agents.filter(a => a.taskId === undefined || !taskIds.has(a.taskId))
   const group = loose.length ? { group: agentGroup(loose, statusById, accent, spin) } : {}
-  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `Working… ${time}`, ...group, ...waiting }
+  if (total === 0) return { title: c.title, filled: 0, rows: [], footer: `${c.activity ?? 'Working…'} ${time}`, ...group, ...waiting }
 
   const working = c.tasks.findIndex(t => t.status === 'in_progress')
   const next = c.tasks.findIndex((t, i) => t.status === 'pending' && i > working)
@@ -130,7 +176,7 @@ export const card = (
     const isWorking = t.status === 'in_progress'
     const showsAgents = own.length > 0 && (isWorking || own.some(a => isRunning(statusById[a.id])))
     const taskGroup = showsAgents ? { group: agentGroup(own, statusById, accent, spin) }
-      : isWorking ? { group: { cells: shimmer(frame), agents: [], more: 0 } } : {}
+      : isWorking ? { group: { cells: shimmer(frame), ...(c.activity ? { label: c.activity } : {}), agents: [], more: 0 } } : {}
     return t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green', ...taskGroup }
       : isWorking ? { mark: spin, subject: t.subject, label: 'Working', color: accent, isBold: true, ...taskGroup }
         : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true }
