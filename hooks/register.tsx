@@ -5,7 +5,7 @@ import type { CardGroup, Trail } from './clean'
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  agentSpawned, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
+  agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -247,7 +247,7 @@ async function tick($: EngineInterface) {
   const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
   if (isOn && c?.agents?.length) {
     const agents = await $.agent.list()
-    await update($, agentStatus, () => Object.fromEntries(agents.map(a => [a.id, a.status])))
+    await update($, agentStatus, prev => agentStatuses(prev, agents, (c.agents ?? []).map(a => a.id)))
   }
 }
 

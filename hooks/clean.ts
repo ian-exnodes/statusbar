@@ -61,6 +61,19 @@ const DONE = ['completed', 'idle']
 const FAILED = ['failed', 'killed']
 export const isRunning = (status: string | undefined) => !DONE.includes(status ?? '') && !FAILED.includes(status ?? '')
 
+// The card's agents by the latest $.agent.list(). The engine drops a finished agent's entry a while after it ends,
+// so one that was listed and is gone keeps its last status, and counts as finished if that was still running
+export const agentStatuses = (
+  prev: Readonly<Record<string, string>>, listed: readonly { id: string; status: string }[], ids: readonly string[],
+) => {
+  const now = Object.fromEntries(listed.map(a => [a.id, a.status]))
+  return Object.fromEntries(ids.flatMap(id => {
+    const last = prev[id]
+    const status = now[id] ?? (last === undefined ? undefined : isRunning(last) ? 'completed' : last)
+    return status === undefined ? [] : [[id, status]]
+  }))
+}
+
 // The agent joins the task in progress when it starts, so parallel tasks keep their own agents
 export const agentSpawned = (c: CleanChecklist, id: string, description: string): CleanChecklist => {
   if (c.agents?.some(a => a.id === id)) return c

@@ -28,6 +28,8 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 - A note of Claude's that happened to be part of a line of a recent answer could show through Clean View. Hidden
   rows now show only when they fill whole lines of a final answer.
 - `/effort` output with "cancel" anywhere in it was read as a cancel.
+- Helper agents that had finished could stay `Running` on the Clean View card (`Waiting for 2 agents`) once Claude Code
+  stopped listing them. An agent that leaves the list now keeps its last status, and counts as done if it was running.
 
 ## 0.9.0 (2026-10-08)
 

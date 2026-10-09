@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   CLEAN_VIEW_NOTE, addFinal, card, checklistReply, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
-  agentSpawned, reopened, shimmer, SPINNER, TASK_CELLS,
+  agentSpawned, agentStatuses, reopened, shimmer, SPINNER, TASK_CELLS,
   activityOf, activitySet, fileChanged, trailLine, trailFor,
 } from './clean'
 
@@ -293,6 +293,14 @@ describe('clean view', () => {
     // Only a whole first line or block, not a word that starts it
     expect(trailFor('First', trails)).toBeUndefined()
     expect(trailFor('Nothing', trails)).toBeUndefined()
+  })
+
+  test('an agent the engine stops listing keeps its last status, and a running one counts as finished', async () => {
+    const ids = ['a1', 'a2', 'a3', 'a4']
+    const seen = agentStatuses({}, [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'failed' }, { id: 'a3', status: 'completed' }], ids)
+    expect(seen).toEqual({ a1: 'running', a2: 'failed', a3: 'completed' })
+    // Later the engine drops all three; a4 was just spawned and is not listed yet
+    expect(agentStatuses(seen, [], ids)).toEqual({ a1: 'completed', a2: 'failed', a3: 'completed' })
   })
 
   test('only the last 50 final answers are kept', async () => {
