@@ -80,6 +80,17 @@ describe('clean view', () => {
     expect(isFinalAnswer('It refreshes every 10 minutes.', finals)).toBe(true)
     expect(isFinalAnswer('Let me check the weather API first.', finals)).toBe(false)
     expect(isFinalAnswer('   ', finals)).toBe(false)
+    // A note that is only part of a line of an answer stays hidden
+    expect(isFinalAnswer('Done.', finals)).toBe(false)
+    expect(isFinalAnswer('dashboard', finals)).toBe(false)
+    // Blocks the terminal draws on their own: an indented list item, a code fence over several lines
+    const rich = addFinal([], '## Steps\n\n1. Install:\n   - run `npm i`\n\n```bash\nnpm test\nnpm run build\n```')
+    expect(isFinalAnswer('- run `npm i`', rich)).toBe(true)
+    expect(isFinalAnswer('```bash\nnpm test\nnpm run build\n```', rich)).toBe(true)
+    expect(isFinalAnswer('## Steps', rich)).toBe(true)
+    // A resumed session's answers come back through finalsFromMessages and still show
+    const resumed = finalsFromMessages([{ role: 'user', text: 'hi' }, { role: 'assistant', text: 'Hello.\n\nHow can I help?' }])
+    expect(isFinalAnswer('How can I help?', resumed)).toBe(true)
   })
 
   test('the planning note rides along with the prompt, once', async () => {
@@ -279,6 +290,8 @@ describe('clean view', () => {
     expect(trailFor('First answer', trails)).toBe('L1')
     // Only above the answer's first block, not each block of it
     expect(trailFor('Second part', trails)).toBeUndefined()
+    // Only a whole first line or block, not a word that starts it
+    expect(trailFor('First', trails)).toBeUndefined()
     expect(trailFor('Nothing', trails)).toBeUndefined()
   })
 
