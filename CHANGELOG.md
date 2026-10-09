@@ -11,6 +11,13 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## Unreleased
+
+### Changed
+
+- The context and usage-limit bars are thin and quieter: `━━━╸─` instead of `███░░`, still 5 cells long. A half
+  cell (`╸`) shows each 10%, and only the filled part takes the green, yellow or red; the rest is dim.
+
 ## 0.9.1 (2026-10-09)
 
 ### Added
