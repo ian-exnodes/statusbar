@@ -4,7 +4,7 @@ A Claude Code plugin (a "mod") that draws a colored, live status line under the 
 
 ```
 [Opus 5.5] high [ ⚙ Command ] | 📁 main-2 | 🌿 main +1~2
-Context █░░░░ 21% | Limit 5h ███░░ 76% | Limit 7d ████░ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m | ▲ +21.4k last turn
+Context ━──── 21% | Limit 5h ━━━╸─ 76% | Limit 7d ━━━━╸ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m | ▲ +21.4k last turn
 ```
 
 It sits below the prompt, under Claude Code's own mode line (`▸▸ bypass permissions on …`).
@@ -68,9 +68,9 @@ claude plugin marketplace remove ian-exnodes
 
 | Shown | Meaning |
 |---|---|
-| `Context █░░░░ 21%` | **Context window fill.** Each block is 20%; the % is exact. It goes **up** as the conversation grows. Green below 70%, yellow from 70%, red from 90%. Near full, Claude Code compacts the conversation. |
-| `Limit 5h ███░░ 76%` | **5-hour usage limit left.** It goes **down** as you work. Green above 30%, yellow at 30% or less, red at 10% or less (the opposite of the context bar). |
-| `Limit 7d ████░ 92%` | **Weekly (7-day) usage limit left.** Same bar and colors as the 5h one. |
+| `Context ━──── 21%` | **Context window fill.** Each thin cell is 20% and a half cell (`╸`) 10%, rounded down; the % is exact. Only the filled part is colored. It goes **up** as the conversation grows. Green below 70%, yellow from 70%, red from 90%. Near full, Claude Code compacts the conversation. |
+| `Limit 5h ━━━╸─ 76%` | **5-hour usage limit left.** It goes **down** as you work. Green above 30%, yellow at 30% or less, red at 10% or less (the opposite of the context bar). |
+| `Limit 7d ━━━━╸ 92%` | **Weekly (7-day) usage limit left.** Same bar and colors as the 5h one. |
 | `↑ 208.1k` (cyan) | Input tokens the latest model response read: the whole conversation, system prompt and tools. This is what fills the context bar. |
 | `↓ 36.8k` (yellow) | Output tokens the model has written, summed over every turn since the plugin loaded in this session. |
 | `$5.79` (magenta) | Estimated cost of the session at API list prices. On a Claude subscription you are not billed this; it shows how much usage the session represents. |

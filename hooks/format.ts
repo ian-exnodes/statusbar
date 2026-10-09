@@ -70,10 +70,13 @@ export const barColor = (percent: number) =>
 export const quotaColor = (remaining: number) =>
   remaining <= 10 ? 'red' : remaining <= 30 ? 'yellow' : 'green'
 
-// 5 blocks of 20% each, so row 2 stays short; the % beside it is the exact figure
-const bar = (percent: number) => {
-  const filled = Math.max(0, Math.min(5, Math.floor(percent / 20)))
-  return '█'.repeat(filled) + '░'.repeat(5 - filled)
+// 5 thin cells of 20%, ╸ for a half cell (10%), rounded down, so row 2 stays short; the % beside it is exact.
+// Only the filled part takes the status color
+export const meter = (percent: number, color: string): Segment[] => {
+  const halves = Math.max(0, Math.min(10, Math.floor(percent / 10)))
+  const filled = '━'.repeat(Math.floor(halves / 2)) + (halves % 2 ? '╸' : '')
+  const empty = '─'.repeat(5 - Math.ceil(halves / 2))
+  return [...(filled ? [{ text: filled, color }] : []), ...(empty ? [{ text: empty, color: 'subtle' }] : [])]
 }
 
 const duration = (ms: number) => {
@@ -108,11 +111,11 @@ export const rows = (f: StatusFigures): Segment[][] => {
     ],
     [
       { text: 'Context ' },
-      { text: bar(f.percent), color: barColor(f.percent) },
+      ...meter(f.percent, barColor(f.percent)),
       { text: ` ${f.percent}% | ` },
       ...f.quotas.flatMap(q => [
         { text: `Limit ${q.label} ` },
-        { text: bar(q.remaining), color: quotaColor(q.remaining) },
+        ...meter(q.remaining, quotaColor(q.remaining)),
         { text: ` ${q.remaining}% | ` },
       ]),
       { text: `↑ ${tokens(f.tokensIn)}`, color: 'cyan' },
