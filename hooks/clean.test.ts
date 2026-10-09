@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import {
-  CLEAN_VIEW_NOTE, addFinal, card, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
+  CLEAN_VIEW_NOTE, addFinal, card, checklistReply, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
   agentSpawned, reopened, shimmer, SPINNER, TASK_CELLS,
   activityOf, activitySet, fileChanged, trailLine, trailFor,
@@ -105,6 +105,11 @@ describe('clean view', () => {
       { id: 'todo-2', subject: 'Report the counts', status: 'pending' },
     ])
     expect(toolChecklist(four, 'nonsense')).toEqual(four)
+  })
+
+  test('the checklist tool tells Claude whether the person saw the list', async () => {
+    expect(checklistReply(true)).toBe('Checklist shown to the person.')
+    expect(checklistReply(false)).toBe('Not shown: Clean View is off, or this call came from a helper agent. Carry on without this tool.')
   })
 
   test("only the main conversation's turn closes the card", async () => {

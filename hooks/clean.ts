@@ -225,6 +225,10 @@ export const toolChecklist = (c: CleanChecklist, input: unknown): CleanChecklist
   return todosWritten(c, valid)
 }
 
+// What the checklist tool answers Claude: only a list that reached the card was shown
+export const checklistReply = (isShown: boolean) => isShown ? 'Checklist shown to the person.'
+  : 'Not shown: Clean View is off, or this call came from a helper agent. Carry on without this tool.'
+
 // A subagent's turn is not the person's request: it neither closes the card nor counts as a final answer
 export const turnOutcome = (e: { reason: string; isAborted: boolean; agentId?: string }) =>
   e.agentId !== undefined ? undefined : e.reason === 'answer' && !e.isAborted ? 'answer' as const : 'stopped' as const

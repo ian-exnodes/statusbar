@@ -5,7 +5,7 @@ import type { CardGroup, Trail } from './clean'
 
 import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
-  agentSpawned, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, turnOutcome, withCleanViewNote,
+  agentSpawned, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
 import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
 
@@ -24,10 +24,38 @@ const closePicker = ($: EngineInterface) => update($, isPickerOpen, () => false)
 // Clean View: hides Claude's work rows and shows a checklist card (pure logic in clean.ts)
 const cleanView = atom({ plugin: 'statusbar', key: 'cleanView' } as const, false)
 
+// The tool Claude sends its plan to (CHECKLIST_TOOL); registered only while Clean View is on
+const registerChecklist = ($: EngineInterface) => $.tool.register({
+  name: 'checklist',
+  description: "Shows the person your plan as a checklist while Clean View is on. Send the whole list each call.",
+  // In the prompt's tool list, so Claude calls it without a ToolSearch first
+  isDeferred: false,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      tasks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            subject: { type: 'string', description: 'A plain-language step, under 50 characters' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+          },
+          required: ['subject', 'status'],
+        },
+      },
+    },
+    required: ['tasks'],
+  },
+})
+
 // Kept across sessions in the plugin's store; loadCleanView reads it back at session start
 const setCleanView = async ($: EngineInterface, isOn: boolean) => {
   await update($, cleanView, () => isOn)
   await $.store.set('cleanView', isOn)
+  // ponytail: no API removes a tool, so one turned off mid-session stays listed until the next session
+  // (its calls then answer "Not shown")
+  if (isOn) await registerChecklist($)
 }
 const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])
@@ -231,29 +259,7 @@ export const register: Register = on => {
     const r = await next(e)
     await $.command.register({ name: 'statusbar', description: 'Open or close the model and effort picker' })
     await loadCleanView($)
-    await $.tool.register({
-      name: 'checklist',
-      description: "Shows the person your plan as a checklist while Clean View is on. Send the whole list each call.",
-      // In the prompt's tool list, so Claude calls it without a ToolSearch first
-      isDeferred: false,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          tasks: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                subject: { type: 'string', description: 'A plain-language step, under 50 characters' },
-                status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
-              },
-              required: ['subject', 'status'],
-            },
-          },
-        },
-        required: ['tasks'],
-      },
-    })
+    if (await read($, cleanView)) await registerChecklist($)
     await seedTurn($)
     await refresh($)
     ticker?.cancel()
@@ -430,10 +436,10 @@ export const register: Register = on => {
   // The plugin's own checklist tool (CHECKLIST_TOOL): answered here, nothing beneath runs. The generated types list
   // only the tools present at the last load, and the validator reads the name only as a literal, hence the cast
   on('tool.call', { tool: 'mcp__statusbar__checklist' as never }, async ($, e: { agentId?: string }) => {
-    if (e.agentId === undefined && (await read($, cleanView))) {
-      await update($, checklist, c => c && toolChecklist(c, e))
-    }
-    return { result: 'Checklist shown to the person.', text: 'Checklist shown to the person.' }
+    const isShown = e.agentId === undefined && (await read($, cleanView)) && (await read($, checklist)) !== null
+    if (isShown) await update($, checklist, c => c && toolChecklist(c, e))
+    const text = checklistReply(isShown)
+    return { result: text, text }
   })
 
   on('tool.call', { tool: 'TaskCreate' }, async ($, e, next) => {
