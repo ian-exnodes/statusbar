@@ -11,6 +11,24 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.1 (2026-10-09)
+
+### Added
+
+- MIT license.
+- CI: GitHub Actions validates and tests the plugin on each push and pull request.
+
+### Changed
+
+- The checklist tool is registered only while Clean View is on, so a session without it carries no extra tool.
+  Turned off mid-session, the tool tells Claude its list was not shown instead of claiming it was.
+
+### Fixed
+
+- A note of Claude's that happened to be part of a line of a recent answer could show through Clean View. Hidden
+  rows now show only when they fill whole lines of a final answer.
+- `/effort` output with "cancel" anywhere in it was read as a cancel.
+
 ## 0.9.0 (2026-10-08)
 
 ### Added
