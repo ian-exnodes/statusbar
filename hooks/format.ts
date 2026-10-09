@@ -53,9 +53,9 @@ export const defaultEffort = (settings: EffortSettings, model: string) =>
 export const mainEffort = (step: { effort?: unknown; agentId?: string }) =>
   step.agentId === undefined ? parseEffort(step.effort) : undefined
 
-// After /effort ran: a cancelled confirm reads "Kept …" (as /model's does) and changed nothing
+// After /effort ran: a cancelled confirm reads "Kept …" (as /model's does) or "… cancelled" and changed nothing
 export const effortFromCommand = (args: string, output: string) =>
-  /^Kept\b|cancel/i.test(output.trim()) ? undefined : parseEffort(args)
+  /^Kept\b|\bcancell?ed\b/i.test(output.trim()) ? undefined : parseEffort(args)
 
 export const tokens = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`

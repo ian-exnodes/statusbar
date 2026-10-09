@@ -1,7 +1,8 @@
 {
   "name": "statusbar",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Colored two-row status line below the prompt: model, folder, git branch and changes, context fill, 5h and 7d quota left, tokens, cost, session time",
   "author": { "name": "ian-exnodes" },
+  "license": "MIT",
   "types": "./types/index.d.ts"
 }

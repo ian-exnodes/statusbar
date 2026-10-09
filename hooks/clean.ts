@@ -61,6 +61,19 @@ const DONE = ['completed', 'idle']
 const FAILED = ['failed', 'killed']
 export const isRunning = (status: string | undefined) => !DONE.includes(status ?? '') && !FAILED.includes(status ?? '')
 
+// The card's agents by the latest $.agent.list(). The engine drops a finished agent's entry a while after it ends,
+// so one that was listed and is gone keeps its last status, and counts as finished if that was still running
+export const agentStatuses = (
+  prev: Readonly<Record<string, string>>, listed: readonly { id: string; status: string }[], ids: readonly string[],
+) => {
+  const now = Object.fromEntries(listed.map(a => [a.id, a.status]))
+  return Object.fromEntries(ids.flatMap(id => {
+    const last = prev[id]
+    const status = now[id] ?? (last === undefined ? undefined : isRunning(last) ? 'completed' : last)
+    return status === undefined ? [] : [[id, status]]
+  }))
+}
+
 // The agent joins the task in progress when it starts, so parallel tasks keep their own agents
 export const agentSpawned = (c: CleanChecklist, id: string, description: string): CleanChecklist => {
   if (c.agents?.some(a => a.id === id)) return c
@@ -140,10 +153,20 @@ export const trailLine = (c: CleanChecklist) => {
 }
 
 export type Trail = { answer: string; line: string }
+// The block at i fills its lines of f: nothing but spaces before it on its first line or after it on its last
+const fillsLines = (f: string, i: number, block: string) => {
+  const end = i + block.length
+  const lineEnd = f.indexOf('\n', end)
+  return !f.slice(f.lastIndexOf('\n', i - 1) + 1, i).trim() && !f.slice(end, lineEnd < 0 ? f.length : lineEnd).trim()
+}
+
 // Only above the answer's first block: the terminal draws a reply in blocks
 export const trailFor = (text: string, trails: readonly Trail[]) => {
   const block = text.trim()
-  return block ? trails.find(t => t.answer.trimStart().startsWith(block))?.line : undefined
+  return block ? trails.find(t => {
+    const answer = t.answer.trimStart()
+    return answer.startsWith(block) && fillsLines(answer, 0, block)
+  })?.line : undefined
 }
 
 export const card = (
@@ -192,10 +215,14 @@ export const card = (
   }
 }
 
-// A block of a final answer, not only the whole: the terminal draws a reply in blocks and hides some parts
+// A block of a final answer, not only the whole: the terminal draws a reply in blocks and hides some parts.
+// Whole lines only, so a note that is part of a line of an answer ("Done.") stays hidden
 export const isFinalAnswer = (text: string, finals: readonly string[]) => {
   const block = text.trim()
-  return block.length > 0 && finals.some(f => f.includes(block))
+  return block.length > 0 && finals.some(f => {
+    for (let i = f.indexOf(block); i >= 0; i = f.indexOf(block, i + 1)) if (fillsLines(f, i, block)) return true
+    return false
+  })
 }
 
 // Read by Claude beside each prompt while Clean View is on, never shown to the person. The plugin's own tool,
@@ -224,6 +251,10 @@ export const toolChecklist = (c: CleanChecklist, input: unknown): CleanChecklist
   })
   return todosWritten(c, valid)
 }
+
+// What the checklist tool answers Claude: only a list that reached the card was shown
+export const checklistReply = (isShown: boolean) => isShown ? 'Checklist shown to the person.'
+  : 'Not shown to the person. Carry on without this tool.'
 
 // A subagent's turn is not the person's request: it neither closes the card nor counts as a final answer
 export const turnOutcome = (e: { reason: string; isAborted: boolean; agentId?: string }) =>

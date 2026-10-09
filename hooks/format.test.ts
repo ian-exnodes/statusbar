@@ -146,6 +146,9 @@ describe('statusbar rows', () => {
     expect(effortFromCommand('max', 'Kept effort as high')).toBeUndefined()
     expect(effortFromCommand('max', 'Effort change cancelled')).toBeUndefined()
     expect(effortFromCommand('auto', 'Set effort level to auto')).toBeUndefined()
+    expect(effortFromCommand('max', 'Effort change canceled')).toBeUndefined()
+    // "cancel" elsewhere in a success message is not a cancel
+    expect(effortFromCommand('low', 'Set effort level to low (press Esc to cancel a turn)')).toBe('low')
   })
 
   test('row 1 shows the effort in its color, then the picker button', async () => {
