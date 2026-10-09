@@ -51,11 +51,18 @@ const registerChecklist = ($: EngineInterface) => $.tool.register({
 
 // Kept across sessions in the plugin's store; loadCleanView reads it back at session start
 const setCleanView = async ($: EngineInterface, isOn: boolean) => {
-  await update($, cleanView, () => isOn)
-  await $.store.set('cleanView', isOn)
   // ponytail: no API removes a tool, so one turned off mid-session stays listed until the next session
   // (its calls then answer "Not shown")
-  if (isOn) await registerChecklist($)
+  if (isOn) {
+    try {
+      await registerChecklist($)
+    } catch (err) {
+      void $.ui.toast(`statusbar: Clean View could not start: ${String(err)}`)
+      return
+    }
+  }
+  await update($, cleanView, () => isOn)
+  await $.store.set('cleanView', isOn)
 }
 const checklist = atom({ plugin: 'statusbar', key: 'checklist' } as const, null)
 const finals = atom({ plugin: 'statusbar', key: 'finals' } as const, [])

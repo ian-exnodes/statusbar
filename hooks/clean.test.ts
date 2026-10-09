@@ -120,7 +120,7 @@ describe('clean view', () => {
 
   test('the checklist tool tells Claude whether the person saw the list', async () => {
     expect(checklistReply(true)).toBe('Checklist shown to the person.')
-    expect(checklistReply(false)).toBe('Not shown: Clean View is off, or this call came from a helper agent. Carry on without this tool.')
+    expect(checklistReply(false)).toBe('Not shown to the person. Carry on without this tool.')
   })
 
   test("only the main conversation's turn closes the card", async () => {

@@ -16,7 +16,7 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 ### Added
 
 - MIT license.
-- CI: GitHub Actions validates and tests the plugin on each push and pull request.
+- CI: GitHub Actions validates and tests the plugin on each push to `main` and each pull request.
 
 ### Changed
 
