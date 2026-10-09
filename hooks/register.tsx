@@ -225,6 +225,7 @@ async function seedTurn($: EngineInterface) {
 // Live figures between events, like a statusLine command re-run by the CLI; git stays on events.
 // The model is read here too: no event reaches a user plugin when it changes (an interactive /model raises
 // no command.run, and cc-plugin-sec-default keeps classic.PostModelSwitch from user-tier plugins)
+// ponytail: updates every second on purpose: the Clean View card's seconds timer redraws with it while nothing animates
 async function tick($: EngineInterface) {
   const [usage, now, model] = await Promise.all([$.session.usage(), $.clock.now(), $.session.model()])
   await update($, figures, f => f && {
@@ -316,9 +317,9 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {rows({ ...f, isClean }).map((row, i) => (
           <Box key={`row${i}`}>
-            {row.map(s => s.isPicker
+            {row.map((s, j) => s.isPicker
               ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
-              : <Text color={s.color}>{s.text}</Text>)}
+              : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}
           </Box>
         ))}
         {hint}
