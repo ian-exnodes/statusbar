@@ -40,7 +40,7 @@ function world(on: On, w: World): MockClock {
   // Without this, Clean View's checklist tool fails to register, the plugin toasts, and Clean View stays off
   on('tool.register', (_$, e) => ({ value: { tool: `mcp__statusbar__${e.name}` } }))
   on('command.run', (_$, e) => { w.commands.push(`${e.command} ${e.args}`.trim()); return { text: '' } })
-  on('config.set', () => ({ value: {} as never }))
+  on('config.set', (_$, e) => { w.commands.push(`config ${e.key}=${String(e.value)}`); return { value: e.value } })
   on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context }))
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
@@ -184,5 +184,19 @@ describe('the 1s tick', () => {
     const before = w.figureWrites
     await clock.advance(3_000)
     expect(w.figureWrites).toBe(before + 3)
+  })
+})
+
+describe('the model picker', () => {
+  test('lists a model from modelSettings and switches to that exact id with /model', async ($, on) => {
+    const w = fresh({ modelSettings: { 'claude-opus-4-1': { effortLevel: 'high' } } })
+    world(on, w)
+    await start($)
+    await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Button', text: 'Opus 4.1' })).toBeDefined()
+    await ui.press({ key: 'model-claude-opus-4-1' })
+    expect(w.commands).toContain('model claude-opus-4-1')
+    await ui.unmount()
   })
 })

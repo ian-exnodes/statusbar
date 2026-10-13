@@ -7,7 +7,7 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, quotas, rows, sameModel, sameRows } from './format'
+import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -205,6 +205,7 @@ async function refresh($: EngineInterface) {
       ms: now - usage.startedAt,
       turnDelta: delta ?? undefined,
       quotas: quotas(usage.rateLimits),
+      models: pickerModels(settings as Parameters<typeof pickerModels>[0]),
     }
   })
 }
@@ -377,7 +378,8 @@ export const register: Register = on => {
     // /config's Model row switches in milliseconds; /model takes a second or two behind its own screen.
     // The row refuses what only a dialog may decide (the long-conversation confirm, Fable's consent): then /model asks
     const pickModel = async (id: string) => {
-      const alias = family(id)
+      // /config's Model row takes a family alias, which means that family's newest model: right for the fixed list only
+      const alias = MODELS.some(m => m.id === id) ? family(id) : undefined
       const set = alias ? await $.config.set({ key: 'model', value: alias }).catch(() => undefined) : undefined
       if (set?.deny !== undefined || set === undefined) return void run('model', id)
       const model = await $.session.model()
@@ -395,7 +397,7 @@ export const register: Register = on => {
         <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
           <Box>
             <Box width={12}><Text dimColor>MODEL</Text></Box>
-            {MODELS.map(m => option(`model-${m.id}`, m.label,
+            {(f.models ?? MODELS).map(m => option(`model-${m.id}`, m.label,
               sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
             <Box flexGrow={1} />
             <Button key="close" plain label="✕" onPress={() => void closePicker($)} />

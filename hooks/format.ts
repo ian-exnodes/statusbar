@@ -12,7 +12,7 @@ export const prettyModel = (id: string) => {
 
 export const EFFORTS: readonly StatusEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-// ponytail: no API lists the models a session may use; add a new model here when it ships
+// The models every picker shows; pickerModels adds the ones the person has used (modelSettings)
 export const MODELS = [
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
@@ -42,12 +42,27 @@ export const parseEffort = (value: unknown): StatusEffort | undefined => {
 
 export const sameModel = (a: string, b: string) => prettyModel(a) === prettyModel(b)
 
-type EffortSettings = { effortLevel?: unknown; modelSettings?: Record<string, { effortLevel?: unknown } | undefined> }
+export type EffortSettings = { effortLevel?: unknown; modelSettings?: Record<string, { effortLevel?: unknown } | undefined> }
 
 // The level a session starts at: interactive /effort saves it per model (modelSettings), older settings keep one.
 // After the start, the session's level carries across a model switch, so this is read only until one is known
 export const defaultEffort = (settings: EffortSettings, model: string) =>
   parseEffort(settings.modelSettings?.[model]?.effortLevel) ?? parseEffort(settings.effortLevel)
+
+export type PickerModel = { id: string; label: string }
+
+// ponytail: 6 fit one picker row at 120 columns; a wider list would need a second row
+const PICKER_MAX = 6
+
+// /effort saves a level per model id in modelSettings: any Claude id there is one the person has used.
+// Aliases (opus), 'default' and other vendors' ids have no claude-<family>-<n> and are left out
+export const pickerModels = (settings: EffortSettings): PickerModel[] => {
+  const found: PickerModel[] = [...MODELS]
+  for (const id of Object.keys(settings.modelSettings ?? {})) {
+    if (family(id) && !found.some(m => sameModel(m.id, id))) found.push({ id, label: prettyModel(id) })
+  }
+  return found.slice(0, PICKER_MAX)
+}
 
 // turn.step fires for subagents too, and an agent may run at its own effort: only the main loop's counts
 export const mainEffort = (step: { effort?: unknown; agentId?: string }) =>

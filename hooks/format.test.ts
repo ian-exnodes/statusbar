@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
+import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
@@ -170,6 +170,21 @@ describe('statusbar rows', () => {
     const [unknown = []] = rows(base)
     expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(plain(unknown)).not.toContain('undefined')
+  })
+})
+
+describe('the model picker', () => {
+  test('the picker adds models from modelSettings after the fixed ones, once each', async () => {
+    const ids = (s: Parameters<typeof pickerModels>[0]) => pickerModels(s).map(m => m.label)
+    expect(ids({})).toEqual(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.1'])
+    expect(ids({ modelSettings: { 'claude-opus-5-5': {}, 'claude-opus-4-1': {}, default: {}, opus: {}, 'gpt-5': {} } }))
+      .toEqual(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.1', 'Opus 4.1'])
+    expect(pickerModels({ modelSettings: { 'claude-opus-4-1': {} } }).at(-1)).toEqual({ id: 'claude-opus-4-1', label: 'Opus 4.1' })
+  })
+
+  test('the picker row stays short: at most 6 models', async () => {
+    const many = Object.fromEntries(['1-0', '2-0', '3-0', '3-5'].map(v => [`claude-opus-${v}`, {}]))
+    expect(pickerModels({ modelSettings: many })).toHaveLength(6)
   })
 })
 

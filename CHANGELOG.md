@@ -19,6 +19,8 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
   cell (`╸`) shows each 10%, and only the filled part takes the green, yellow or red; the rest is dim.
 - An idle session no longer redraws the status bar every second; it redraws when something on it changes (the
   timer once a minute). A working Clean View card still counts its seconds.
+- The picker also lists models you have used (those with an effort saved in `modelSettings`), so a new model no
+  longer waits for a statusbar release. They switch with `/model <id>`, so an older Opus stays that Opus.
 
 ### Fixed
 
