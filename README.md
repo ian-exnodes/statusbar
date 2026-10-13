@@ -88,8 +88,8 @@ Press `⚙ Command` (or run `/statusbar`) to open a small box above the prompt:
     MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
 
-Models you have set an effort for with `/effort` (saved in `modelSettings`) are added after these, up to 6 in all,
-so a new model shows up once you have used it. Those switch with `/model <id>`, so an older Opus stays that Opus.
+Models you have set an effort for with `/effort` (saved in `modelSettings`) are added after these, newest first, up to 6 in
+all (the model you are on always keeps a place), so a new model shows up once you have used it. Those switch with `/model <id>`, so an older Opus stays that Opus.
 
 The current model and effort are highlighted. A model is set through `/config`'s Model setting, which switches
 at once and, like `/model`, also makes it your default for new sessions. When Claude Code needs to ask first (in a

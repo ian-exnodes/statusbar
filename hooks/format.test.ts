@@ -182,6 +182,13 @@ describe('the model picker', () => {
     expect(pickerModels({ modelSettings: { 'claude-opus-4-1': {} } }).at(-1)).toEqual({ id: 'claude-opus-4-1', label: 'Opus 4.1' })
   })
 
+  test('past the cap, the current model and the newest ids stay, whatever order settings lists them in', async () => {
+    const old = { 'claude-opus-4-1': {}, 'claude-sonnet-4-1': {}, 'claude-opus-4-5': {}, 'claude-opus-6-0': {} }
+    expect(pickerModels({ modelSettings: old }).map(m => m.label).slice(4)).toEqual(['Opus 6.0', 'Opus 4.5'])
+    expect(pickerModels({ modelSettings: old }, 'claude-opus-4-1').map(m => m.label).slice(4)).toEqual(['Opus 6.0', 'Opus 4.1'])
+    expect(pickerModels({ modelSettings: old }, 'claude-opus-6-0')).toHaveLength(6)
+  })
+
   test('the picker row stays short: at most 6 models', async () => {
     const many = Object.fromEntries(['1-0', '2-0', '3-0', '3-5'].map(v => [`claude-opus-${v}`, {}]))
     expect(pickerModels({ modelSettings: many })).toHaveLength(6)

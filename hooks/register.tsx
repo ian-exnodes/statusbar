@@ -205,7 +205,7 @@ async function refresh($: EngineInterface) {
       ms: now - usage.startedAt,
       turnDelta: delta ?? undefined,
       quotas: quotas(usage.rateLimits),
-      models: pickerModels(settings as Parameters<typeof pickerModels>[0]),
+      models: pickerModels(settings as Parameters<typeof pickerModels>[0], model),
     }
   })
 }

@@ -54,14 +54,24 @@ export type PickerModel = { id: string; label: string }
 // ponytail: 6 fit one picker row at 120 columns; a wider list would need a second row
 const PICKER_MAX = 6
 
+// 4-5 → 4.05, 4-1-20250805 → 4.01, 4-20250514 → 4: orders ids of a family newest first
+const version = (id: string) => {
+  const [, major = '0', minor = '0'] = /claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id) ?? []
+  return Number(major) + Number(minor) / 100
+}
+
 // /effort saves a level per model id in modelSettings: any Claude id there is one the person has used.
-// Aliases (opus), 'default' and other vendors' ids have no claude-<family>-<n> and are left out
-export const pickerModels = (settings: EffortSettings): PickerModel[] => {
+// Aliases (opus), 'default' and other vendors' ids have no claude-<family>-<n> and are left out.
+// Past the cap the newest stay, and the session's model always keeps a slot so the picker can highlight it
+export const pickerModels = (settings: EffortSettings, current?: string): PickerModel[] => {
   const found: PickerModel[] = [...MODELS]
-  for (const id of Object.keys(settings.modelSettings ?? {})) {
+  const used = Object.keys(settings.modelSettings ?? {}).sort((a, b) => version(b) - version(a))
+  for (const id of used) {
     if (family(id) && !found.some(m => sameModel(m.id, id))) found.push({ id, label: prettyModel(id) })
   }
-  return found.slice(0, PICKER_MAX)
+  const shown = found.slice(0, PICKER_MAX)
+  const own = current && found.find(m => sameModel(m.id, current))
+  return own && !shown.includes(own) ? [...shown.slice(0, PICKER_MAX - 1), own] : shown
 }
 
 // turn.step fires for subagents too, and an agent may run at its own effort: only the main loop's counts
