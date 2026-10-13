@@ -18,6 +18,14 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 - The context and usage-limit bars are thin and quieter: `━━━╸─` instead of `███░░`, still 5 cells long. A half
   cell (`╸`) shows each 10%, and only the filled part takes the green, yellow or red; the rest is dim.
 
+### Fixed
+
+- Untracked files are counted: `?3` after the staged and unstaged counts.
+- A detached HEAD shows its short commit, `🌿 (a1b2c3d)`, instead of an empty branch.
+- The status bar runs one `git status` per refresh instead of three git commands, gives up after 3 seconds on a
+  slow filesystem (keeping the last branch and counts), and no longer takes git's index lock, so it cannot get in
+  the way of your own `git add`.
+
 ## 0.9.1 (2026-10-09)
 
 ### Added

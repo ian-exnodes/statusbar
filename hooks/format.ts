@@ -92,11 +92,37 @@ export const quotas = (limits: readonly { kind: string; percentUsed: number }[])
     return label ? [{ label, remaining: Math.max(0, Math.floor(100 - l.percentUsed)) }] : []
   })
 
+// --no-optional-locks: a plain status refreshes .git/index and can leave the person's own git add facing index.lock
+export const GIT_STATUS = ['git', '--no-optional-locks', 'status', '--porcelain=v2', '--branch'] as const
+// A slow filesystem stalls the turn hook no longer than this
+export const GIT_TIMEOUT_MS = 3000
+
+export type GitFigures = { branch: string; staged: number; modified: number; untracked: number }
+
+// 1/2 = changed/renamed (XY: index, worktree; '.' unchanged), u = conflict (unstaged work), ? = untracked
+export const parseGitStatus = (stdout: string): GitFigures => {
+  let head = ''
+  let oid = ''
+  const n = { staged: 0, modified: 0, untracked: 0 }
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('# branch.head ')) head = line.slice('# branch.head '.length)
+    else if (line.startsWith('# branch.oid ')) oid = line.slice('# branch.oid '.length)
+    else if (line[0] === '?') n.untracked++
+    else if (line[0] === 'u') n.modified++
+    else if (line[0] === '1' || line[0] === '2') {
+      if (line[2] !== '.') n.staged++
+      if (line[3] !== '.') n.modified++
+    }
+  }
+  return { branch: head === '(detached)' ? `(${oid.slice(0, 7)})` : head, ...n }
+}
+
 export const rows = (f: StatusFigures): Segment[][] => {
   const git: Segment[] = f.branch === undefined ? [] : [
     { text: ` | 🌿 ${f.branch} ` },
     ...(f.staged ? [{ text: `+${f.staged}`, color: 'green' }] : []),
     ...(f.modified ? [{ text: `~${f.modified}`, color: 'yellow' }] : []),
+    ...(f.untracked ? [{ text: `?${f.untracked}`, color: 'subtle' }] : []),
   ]
 
   return [

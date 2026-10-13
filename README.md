@@ -61,8 +61,10 @@ claude plugin marketplace remove ian-exnodes
 | `[ ⚙ Command ]` | A button: opens the model and effort picker. |
 | `📁 main-2` | The last folder of the session's working directory. |
 | `🌿 main` | The current git branch. Hidden outside a git repo. |
-| `+1` (green) | Files with **staged** changes (`git diff --cached`). |
-| `~2` (yellow) | Files with **unstaged** changes to tracked files (`git diff`). Untracked files are not counted. |
+| `+1` (green) | Files with **staged** changes. |
+| `~2` (yellow) | Files with **unstaged** changes to tracked files, conflicts included. |
+| `?3` (dim) | **Untracked** files; an untracked folder counts once. |
+| `🌿 (a1b2c3d)` | A detached HEAD shows its short commit in parentheses. |
 
 ### Row 2: what the session is using
 

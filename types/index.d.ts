@@ -36,6 +36,8 @@ export type StatusFigures = {
   branch?: string
   staged: number
   modified: number
+  /** Untracked files; an untracked folder counts once, as `git status` lists it. */
+  untracked: number
   percent: number
   tokensIn: number
   tokensOut: number

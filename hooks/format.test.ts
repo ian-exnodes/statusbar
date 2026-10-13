@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
+import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
 
-const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2,
+const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
 const plain = (r: { text: string }[]) => r.map(s => s.text).join('')
 const colorOf = (r: { text: string; color?: string }[], text: string) => r.find(s => s.text.includes(text))?.color
@@ -28,7 +28,8 @@ describe('statusbar rows', () => {
 
   test('two rows with the statusline.sh text and colors', async () => {
     const [top = [], bottom = []] = rows(base)
-    expect(plain(top)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
+    expect(colorOf(top, '?3')).toBe('subtle')
     expect(plain(bottom)).toBe('Context ━╸─── 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m')
     expect(colorOf(top, 'Opus')).toBe('magenta')
     expect(colorOf(top, '+1')).toBe('green')
@@ -83,7 +84,7 @@ describe('statusbar rows', () => {
 
   test('row 1 shows ◐ Clean after the button while Clean View is on', async () => {
     const [on = []] = rows({ ...base, isClean: true })
-    expect(plain(on)).toBe('[Opus 5.5] ⚙ Command ◐ Clean | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(on)).toBe('[Opus 5.5] ⚙ Command ◐ Clean | 📁 main-2 | 🌿 main +1~2?3')
     expect(colorOf(on, '◐')).toBe('green')
     const [off = []] = rows(base)
     expect(plain(off)).not.toContain('◐')
@@ -162,12 +163,42 @@ describe('statusbar rows', () => {
 
   test('row 1 shows the effort in its color, then the picker button', async () => {
     const [top = []] = rows({ ...base, effort: 'high' })
-    expect(plain(top)).toBe('[Opus 5.5] high ⚙ Command | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] high ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(colorOf(top, 'high')).toBe('yellow')
     expect(top.find(s => s.isPicker)?.text).toBe('⚙ Command')
 
     const [unknown = []] = rows(base)
-    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(plain(unknown)).not.toContain('undefined')
+  })
+})
+
+describe('git status', () => {
+  const v2 = (...lines: string[]) => lines.join('\n') + '\n'
+
+  test('counts staged, unstaged and untracked from one porcelain v2 listing', async () => {
+    expect(parseGitStatus(v2(
+      '# branch.oid 1234567890abcdef',
+      '# branch.head feat/x',
+      '# branch.upstream origin/feat/x',
+      '# branch.ab +1 -0',
+      '1 M. N... 100644 100644 100644 aaa bbb hooks/a.ts',
+      '1 .M N... 100644 100644 100644 aaa bbb hooks/b.ts',
+      '1 MM N... 100644 100644 100644 aaa bbb hooks/c.ts',
+      '2 R. N... 100644 100644 100644 aaa bbb R100 new.ts\told.ts',
+      'u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict.ts',
+      '? notes.md',
+      '? scratch/',
+    ))).toEqual({ branch: 'feat/x', staged: 3, modified: 3, untracked: 2 })
+  })
+
+  test('a detached HEAD shows its short commit, a repo with no commits its branch', async () => {
+    expect(parseGitStatus(v2('# branch.oid 1234567890abcdef', '# branch.head (detached)')).branch).toBe('(1234567)')
+    expect(parseGitStatus(v2('# branch.oid (initial)', '# branch.head main'))).toEqual({ branch: 'main', staged: 0, modified: 0, untracked: 0 })
+  })
+
+  test('the row leaves out counts that are zero', async () => {
+    const [top = []] = rows({ ...base, staged: 0, modified: 0, untracked: 0 })
+    expect(plain(top)).toEndWith('| 🌿 main ')
   })
 })

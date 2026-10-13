@@ -7,7 +7,7 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
+import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, quotas, rows, sameModel } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -178,36 +178,35 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
   )
 }
 
-const lines = (s: string) => s.split('\n').filter(Boolean).length
-
 async function refresh($: EngineInterface) {
   const [model, dir, usage, now, out, delta, picked, settings] = await Promise.all([
     $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, turnDelta),
     read($, effort), $.settings.read(),
   ])
-  const [branch, staged, modified] = await Promise.all([
-    $.process.run(['git', 'branch', '--show-current']).catch(() => undefined),
-    $.process.run(['git', 'diff', '--cached', '--numstat']).catch(() => undefined),
-    $.process.run(['git', 'diff', '--numstat']).catch(() => undefined),
-  ])
-  const isRepo = branch?.exitCode === 0
+  // undefined: git timed out or could not start, so the last figures stay; null: not a repo
+  const status = await $.process.run(GIT_STATUS, { timeoutMs: GIT_TIMEOUT_MS }).catch(() => undefined)
+  const git = status === undefined ? undefined : status.exitCode === 0 ? parseGitStatus(status.stdout) : null
 
-  await update($, figures, () => ({
-    model,
-    // The last level /effort, the picker or a turn named, else the level the session started at
-    effort: picked ?? defaultEffort(settings as Parameters<typeof defaultEffort>[0], model),
-    dir,
-    branch: isRepo ? branch.stdout.trim() : undefined,
-    staged: isRepo ? lines(staged?.stdout ?? '') : 0,
-    modified: isRepo ? lines(modified?.stdout ?? '') : 0,
-    percent: usage.context.percent ?? 0,
-    tokensIn: usage.context.tokens ?? 0,
-    tokensOut: out,
-    usd: usage.cost?.usd ?? 0,
-    ms: now - usage.startedAt,
-    turnDelta: delta ?? undefined,
-    quotas: quotas(usage.rateLimits),
-  }))
+  await update($, figures, prev => {
+    const g = git === undefined ? prev : git
+    return {
+      model,
+      // The last level /effort, the picker or a turn named, else the level the session started at
+      effort: picked ?? defaultEffort(settings as Parameters<typeof defaultEffort>[0], model),
+      dir,
+      branch: g?.branch,
+      staged: g?.staged ?? 0,
+      modified: g?.modified ?? 0,
+      untracked: g?.untracked ?? 0,
+      percent: usage.context.percent ?? 0,
+      tokensIn: usage.context.tokens ?? 0,
+      tokensOut: out,
+      usd: usage.cost?.usd ?? 0,
+      ms: now - usage.startedAt,
+      turnDelta: delta ?? undefined,
+      quotas: quotas(usage.rateLimits),
+    }
+  })
 }
 
 // Context growth over the turn, as ak-cockpit shows it: tokens now minus tokens after the turn before

@@ -43,6 +43,7 @@ function world(on: On, w: World): MockClock {
   on('config.set', () => ({ value: {} as never }))
   on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context }))
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('session.measure', (_$, e) => ({ changed: e.changed }))
   on('ui.toast', (_$, e) => { w.toasts.push(e.text); return { value: undefined } })
   // The engine's own drawing beneath the plugin: an answer's text, nothing for the rest
   on('ui.render', { component: 'AssistantMessage' }, ($, e) => { const { Text } = $.ui.resolve(e); return <Text>{e.props.text}</Text> })
@@ -115,5 +116,48 @@ describe('register hooks', () => {
     const note = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Let me look.', isFirstOfReply: true } })
     expect(await note.find({ text: 'Let me look.' })).toBeUndefined()
     await note.unmount()
+  })
+})
+
+describe('git on the status bar', () => {
+  const v2 = '# branch.oid 1234567890abcdef\n# branch.head main\n1 M. N... 1 1 1 a b x.ts\n1 .M N... 1 1 1 a b y.ts\n? z.md\n'
+
+  test('one git process per refresh, counting untracked files', async ($, on) => {
+    const w = fresh({ git: v2 })
+    world(on, w)
+    await start($)
+    expect(w.gitRuns).toEqual([['git', '--no-optional-locks', 'status', '--porcelain=v2', '--branch']])
+    const ui = await $.ui.mount(HINT)
+    expect(await ui.find({ type: 'Text', text: '🌿 main' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '?1' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a detached HEAD shows its short commit, not an empty branch', async ($, on) => {
+    world(on, fresh({ git: '# branch.oid 1234567890abcdef\n# branch.head (detached)\n' }))
+    await start($)
+    const ui = await $.ui.mount(HINT)
+    expect(await ui.find({ type: 'Text', text: '🌿 (1234567)' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('outside a repo there is no branch segment', async ($, on) => {
+    world(on, fresh({ git: 'not-a-repo' }))
+    await start($)
+    const ui = await $.ui.mount(HINT)
+    expect(await ui.find({ type: 'Text', text: '🌿' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('a timed-out git call keeps the last branch and counts', async ($, on) => {
+    const w = fresh({ git: v2 })
+    world(on, w)
+    await start($)
+    w.git = 'timeout'
+    await $.session.measure({ context: { window: 200_000 }, rateLimits: [], changed: [] })
+    const ui = await $.ui.mount(HINT)
+    expect(await ui.find({ type: 'Text', text: '🌿 main' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '?1' })).toBeDefined()
+    await ui.unmount()
   })
 })
