@@ -61,8 +61,10 @@ claude plugin marketplace remove ian-exnodes
 | `[ ⚙ Command ]` | A button: opens the model and effort picker. |
 | `📁 main-2` | The last folder of the session's working directory. |
 | `🌿 main` | The current git branch. Hidden outside a git repo. |
-| `+1` (green) | Files with **staged** changes (`git diff --cached`). |
-| `~2` (yellow) | Files with **unstaged** changes to tracked files (`git diff`). Untracked files are not counted. |
+| `+1` (green) | Files with **staged** changes. |
+| `~2` (yellow) | Files with **unstaged** changes to tracked files, conflicts included. |
+| `?3` (dim) | **Untracked** files; an untracked folder counts once. |
+| `🌿 (a1b2c3d)` | A detached HEAD shows its short commit in parentheses. |
 
 ### Row 2: what the session is using
 
@@ -85,6 +87,9 @@ Press `⚙ Command` (or run `/statusbar`) to open a small box above the prompt:
 
     MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
+
+Models you have set an effort for with `/effort` (saved in `modelSettings`) are added after these, newest first, up to 6 in
+all (the model you are on always keeps a place), so a new model shows up once you have used it. Those switch with `/model <id>`, so an older Opus stays that Opus.
 
 The current model and effort are highlighted. A model is set through `/config`'s Model setting, which switches
 at once and, like `/model`, also makes it your default for new sessions. When Claude Code needs to ask first (in a

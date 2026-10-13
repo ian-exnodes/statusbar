@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
+import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
 
-const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2,
+const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
 const plain = (r: { text: string }[]) => r.map(s => s.text).join('')
 const colorOf = (r: { text: string; color?: string }[], text: string) => r.find(s => s.text.includes(text))?.color
@@ -28,7 +28,8 @@ describe('statusbar rows', () => {
 
   test('two rows with the statusline.sh text and colors', async () => {
     const [top = [], bottom = []] = rows(base)
-    expect(plain(top)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
+    expect(colorOf(top, '?3')).toBe('subtle')
     expect(plain(bottom)).toBe('Context ━╸─── 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m')
     expect(colorOf(top, 'Opus')).toBe('magenta')
     expect(colorOf(top, '+1')).toBe('green')
@@ -83,7 +84,7 @@ describe('statusbar rows', () => {
 
   test('row 1 shows ◐ Clean after the button while Clean View is on', async () => {
     const [on = []] = rows({ ...base, isClean: true })
-    expect(plain(on)).toBe('[Opus 5.5] ⚙ Command ◐ Clean | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(on)).toBe('[Opus 5.5] ⚙ Command ◐ Clean | 📁 main-2 | 🌿 main +1~2?3')
     expect(colorOf(on, '◐')).toBe('green')
     const [off = []] = rows(base)
     expect(plain(off)).not.toContain('◐')
@@ -162,12 +163,74 @@ describe('statusbar rows', () => {
 
   test('row 1 shows the effort in its color, then the picker button', async () => {
     const [top = []] = rows({ ...base, effort: 'high' })
-    expect(plain(top)).toBe('[Opus 5.5] high ⚙ Command | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(top)).toBe('[Opus 5.5] high ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(colorOf(top, 'high')).toBe('yellow')
     expect(top.find(s => s.isPicker)?.text).toBe('⚙ Command')
 
     const [unknown = []] = rows(base)
-    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2')
+    expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(plain(unknown)).not.toContain('undefined')
+  })
+})
+
+describe('the model picker', () => {
+  test('the picker adds models from modelSettings after the fixed ones, once each', async () => {
+    const ids = (s: Parameters<typeof pickerModels>[0]) => pickerModels(s).map(m => m.label)
+    expect(ids({})).toEqual(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.1'])
+    expect(ids({ modelSettings: { 'claude-opus-5-5': {}, 'claude-opus-4-1': {}, default: {}, opus: {}, 'gpt-5': {} } }))
+      .toEqual(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.1', 'Opus 4.1'])
+    expect(pickerModels({ modelSettings: { 'claude-opus-4-1': {} } }).at(-1)).toEqual({ id: 'claude-opus-4-1', label: 'Opus 4.1' })
+  })
+
+  test('past the cap, the current model and the newest ids stay, whatever order settings lists them in', async () => {
+    const old = { 'claude-opus-4-1': {}, 'claude-sonnet-4-1': {}, 'claude-opus-4-5': {}, 'claude-opus-6-0': {} }
+    expect(pickerModels({ modelSettings: old }).map(m => m.label).slice(4)).toEqual(['Opus 6.0', 'Opus 4.5'])
+    expect(pickerModels({ modelSettings: old }, 'claude-opus-4-1').map(m => m.label).slice(4)).toEqual(['Opus 6.0', 'Opus 4.1'])
+    expect(pickerModels({ modelSettings: old }, 'claude-opus-6-0')).toHaveLength(6)
+  })
+
+  test('the picker row stays short: at most 6 models', async () => {
+    const many = Object.fromEntries(['1-0', '2-0', '3-0', '3-5'].map(v => [`claude-opus-${v}`, {}]))
+    expect(pickerModels({ modelSettings: many })).toHaveLength(6)
+  })
+})
+
+describe('the 1s tick', () => {
+  test('figures that draw the same rows are the same, though the clock moved', async () => {
+    expect(sameRows(base, { ...base, ms: base.ms + 1_000 })).toBe(true)
+    expect(sameRows(base, { ...base, usd: 1.2341 })).toBe(true)
+    expect(sameRows({ ...base, ms: 59_000 }, { ...base, ms: 60_000 })).toBe(false)
+    expect(sameRows(base, { ...base, percent: 38 })).toBe(false)
+    expect(sameRows(base, { ...base, quotas: [{ label: '5h', remaining: 50 }] })).toBe(false)
+  })
+})
+
+describe('git status', () => {
+  const v2 = (...lines: string[]) => lines.join('\n') + '\n'
+
+  test('counts staged, unstaged and untracked from one porcelain v2 listing', async () => {
+    expect(parseGitStatus(v2(
+      '# branch.oid 1234567890abcdef',
+      '# branch.head feat/x',
+      '# branch.upstream origin/feat/x',
+      '# branch.ab +1 -0',
+      '1 M. N... 100644 100644 100644 aaa bbb hooks/a.ts',
+      '1 .M N... 100644 100644 100644 aaa bbb hooks/b.ts',
+      '1 MM N... 100644 100644 100644 aaa bbb hooks/c.ts',
+      '2 R. N... 100644 100644 100644 aaa bbb R100 new.ts\told.ts',
+      'u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict.ts',
+      '? notes.md',
+      '? scratch/',
+    ))).toEqual({ branch: 'feat/x', staged: 3, modified: 3, untracked: 2 })
+  })
+
+  test('a detached HEAD shows its short commit, a repo with no commits its branch', async () => {
+    expect(parseGitStatus(v2('# branch.oid 1234567890abcdef', '# branch.head (detached)')).branch).toBe('(1234567)')
+    expect(parseGitStatus(v2('# branch.oid (initial)', '# branch.head main'))).toEqual({ branch: 'main', staged: 0, modified: 0, untracked: 0 })
+  })
+
+  test('the row leaves out counts that are zero', async () => {
+    const [top = []] = rows({ ...base, staged: 0, modified: 0, untracked: 0 })
+    expect(plain(top)).toEndWith('| 🌿 main ')
   })
 })

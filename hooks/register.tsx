@@ -7,7 +7,7 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, quotas, rows, sameModel } from './format'
+import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -178,36 +178,36 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
   )
 }
 
-const lines = (s: string) => s.split('\n').filter(Boolean).length
-
 async function refresh($: EngineInterface) {
   const [model, dir, usage, now, out, delta, picked, settings] = await Promise.all([
     $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, turnDelta),
     read($, effort), $.settings.read(),
   ])
-  const [branch, staged, modified] = await Promise.all([
-    $.process.run(['git', 'branch', '--show-current']).catch(() => undefined),
-    $.process.run(['git', 'diff', '--cached', '--numstat']).catch(() => undefined),
-    $.process.run(['git', 'diff', '--numstat']).catch(() => undefined),
-  ])
-  const isRepo = branch?.exitCode === 0
+  // undefined: git timed out or could not start, so the last figures stay; null: not a repo
+  const status = await $.process.run(GIT_STATUS, { timeoutMs: GIT_TIMEOUT_MS }).catch(() => undefined)
+  const git = status === undefined ? undefined : status.exitCode === 0 ? parseGitStatus(status.stdout) : null
 
-  await update($, figures, () => ({
-    model,
-    // The last level /effort, the picker or a turn named, else the level the session started at
-    effort: picked ?? defaultEffort(settings as Parameters<typeof defaultEffort>[0], model),
-    dir,
-    branch: isRepo ? branch.stdout.trim() : undefined,
-    staged: isRepo ? lines(staged?.stdout ?? '') : 0,
-    modified: isRepo ? lines(modified?.stdout ?? '') : 0,
-    percent: usage.context.percent ?? 0,
-    tokensIn: usage.context.tokens ?? 0,
-    tokensOut: out,
-    usd: usage.cost?.usd ?? 0,
-    ms: now - usage.startedAt,
-    turnDelta: delta ?? undefined,
-    quotas: quotas(usage.rateLimits),
-  }))
+  await update($, figures, prev => {
+    const g = git === undefined ? prev : git
+    return {
+      model,
+      // The last level /effort, the picker or a turn named, else the level the session started at
+      effort: picked ?? defaultEffort(settings as Parameters<typeof defaultEffort>[0], model),
+      dir,
+      branch: g?.branch,
+      staged: g?.staged ?? 0,
+      modified: g?.modified ?? 0,
+      untracked: g?.untracked ?? 0,
+      percent: usage.context.percent ?? 0,
+      tokensIn: usage.context.tokens ?? 0,
+      tokensOut: out,
+      usd: usage.cost?.usd ?? 0,
+      ms: now - usage.startedAt,
+      turnDelta: delta ?? undefined,
+      quotas: quotas(usage.rateLimits),
+      models: pickerModels(settings as Parameters<typeof pickerModels>[0], model),
+    }
+  })
 }
 
 // Context growth over the turn, as ak-cockpit shows it: tokens now minus tokens after the turn before
@@ -232,19 +232,24 @@ async function seedTurn($: EngineInterface) {
 // Live figures between events, like a statusLine command re-run by the CLI; git stays on events.
 // The model is read here too: no event reaches a user plugin when it changes (an interactive /model raises
 // no command.run, and cc-plugin-sec-default keeps classic.PostModelSwitch from user-tier plugins)
-// ponytail: updates every second on purpose: the Clean View card's seconds timer redraws with it while nothing animates
+// Writes only when the rows would change (the timer shows minutes), except while a Clean View card works:
+// its seconds timer reads the clock and redraws on this write when nothing on it animates
 async function tick($: EngineInterface) {
-  const [usage, now, model] = await Promise.all([$.session.usage(), $.clock.now(), $.session.model()])
-  await update($, figures, f => f && {
-    ...f,
+  const [usage, now, model, shown, isOn, c] = await Promise.all([
+    $.session.usage(), $.clock.now(), $.session.model(), read($, figures), read($, cleanView), read($, checklist),
+  ])
+  const live = {
     model,
     percent: usage.context.percent ?? 0,
     tokensIn: usage.context.tokens ?? 0,
     usd: usage.cost?.usd ?? 0,
     ms: now - usage.startedAt,
     quotas: quotas(usage.rateLimits),
-  })
-  const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
+  }
+  const isTiming = isOn && c !== null && c.endedAt === undefined
+  if (shown !== null && (isTiming || !sameRows(shown, { ...shown, ...live }))) {
+    await update($, figures, f => f && { ...f, ...live })
+  }
   if (isOn && c?.agents?.length) {
     const agents = await $.agent.list()
     await update($, agentStatus, prev => agentStatuses(prev, agents, (c.agents ?? []).map(a => a.id)))
@@ -373,7 +378,8 @@ export const register: Register = on => {
     // /config's Model row switches in milliseconds; /model takes a second or two behind its own screen.
     // The row refuses what only a dialog may decide (the long-conversation confirm, Fable's consent): then /model asks
     const pickModel = async (id: string) => {
-      const alias = family(id)
+      // /config's Model row takes a family alias, which means that family's newest model: right for the fixed list only
+      const alias = MODELS.some(m => m.id === id) ? family(id) : undefined
       const set = alias ? await $.config.set({ key: 'model', value: alias }).catch(() => undefined) : undefined
       if (set?.deny !== undefined || set === undefined) return void run('model', id)
       const model = await $.session.model()
@@ -391,7 +397,7 @@ export const register: Register = on => {
         <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
           <Box>
             <Box width={12}><Text dimColor>MODEL</Text></Box>
-            {MODELS.map(m => option(`model-${m.id}`, m.label,
+            {(f.models ?? MODELS).map(m => option(`model-${m.id}`, m.label,
               sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
             <Box flexGrow={1} />
             <Button key="close" plain label="✕" onPress={() => void closePicker($)} />

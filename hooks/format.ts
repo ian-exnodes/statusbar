@@ -12,7 +12,7 @@ export const prettyModel = (id: string) => {
 
 export const EFFORTS: readonly StatusEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-// ponytail: no API lists the models a session may use; add a new model here when it ships
+// The models every picker shows; pickerModels adds the ones the person has used (modelSettings)
 export const MODELS = [
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
@@ -42,12 +42,37 @@ export const parseEffort = (value: unknown): StatusEffort | undefined => {
 
 export const sameModel = (a: string, b: string) => prettyModel(a) === prettyModel(b)
 
-type EffortSettings = { effortLevel?: unknown; modelSettings?: Record<string, { effortLevel?: unknown } | undefined> }
+export type EffortSettings = { effortLevel?: unknown; modelSettings?: Record<string, { effortLevel?: unknown } | undefined> }
 
 // The level a session starts at: interactive /effort saves it per model (modelSettings), older settings keep one.
 // After the start, the session's level carries across a model switch, so this is read only until one is known
 export const defaultEffort = (settings: EffortSettings, model: string) =>
   parseEffort(settings.modelSettings?.[model]?.effortLevel) ?? parseEffort(settings.effortLevel)
+
+export type PickerModel = { id: string; label: string }
+
+// ponytail: 6 fit one picker row at 120 columns; a wider list would need a second row
+const PICKER_MAX = 6
+
+// 4-5 → 4.05, 4-1-20250805 → 4.01, 4-20250514 → 4: orders ids of a family newest first
+const version = (id: string) => {
+  const [, major = '0', minor = '0'] = /claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id) ?? []
+  return Number(major) + Number(minor) / 100
+}
+
+// /effort saves a level per model id in modelSettings: any Claude id there is one the person has used.
+// Aliases (opus), 'default' and other vendors' ids have no claude-<family>-<n> and are left out.
+// Past the cap the newest stay, and the session's model always keeps a slot so the picker can highlight it
+export const pickerModels = (settings: EffortSettings, current?: string): PickerModel[] => {
+  const found: PickerModel[] = [...MODELS]
+  const used = Object.keys(settings.modelSettings ?? {}).sort((a, b) => version(b) - version(a))
+  for (const id of used) {
+    if (family(id) && !found.some(m => sameModel(m.id, id))) found.push({ id, label: prettyModel(id) })
+  }
+  const shown = found.slice(0, PICKER_MAX)
+  const own = current && found.find(m => sameModel(m.id, current))
+  return own && !shown.includes(own) ? [...shown.slice(0, PICKER_MAX - 1), own] : shown
+}
 
 // turn.step fires for subagents too, and an agent may run at its own effort: only the main loop's counts
 export const mainEffort = (step: { effort?: unknown; agentId?: string }) =>
@@ -92,11 +117,37 @@ export const quotas = (limits: readonly { kind: string; percentUsed: number }[])
     return label ? [{ label, remaining: Math.max(0, Math.floor(100 - l.percentUsed)) }] : []
   })
 
+// --no-optional-locks: a plain status refreshes .git/index and can leave the person's own git add facing index.lock
+export const GIT_STATUS = ['git', '--no-optional-locks', 'status', '--porcelain=v2', '--branch'] as const
+// A slow filesystem stalls the turn hook no longer than this
+export const GIT_TIMEOUT_MS = 3000
+
+export type GitFigures = { branch: string; staged: number; modified: number; untracked: number }
+
+// 1/2 = changed/renamed (XY: index, worktree; '.' unchanged), u = conflict (unstaged work), ? = untracked
+export const parseGitStatus = (stdout: string): GitFigures => {
+  let head = ''
+  let oid = ''
+  const n = { staged: 0, modified: 0, untracked: 0 }
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('# branch.head ')) head = line.slice('# branch.head '.length)
+    else if (line.startsWith('# branch.oid ')) oid = line.slice('# branch.oid '.length)
+    else if (line[0] === '?') n.untracked++
+    else if (line[0] === 'u') n.modified++
+    else if (line[0] === '1' || line[0] === '2') {
+      if (line[2] !== '.') n.staged++
+      if (line[3] !== '.') n.modified++
+    }
+  }
+  return { branch: head === '(detached)' ? `(${oid.slice(0, 7)})` : head, ...n }
+}
+
 export const rows = (f: StatusFigures): Segment[][] => {
   const git: Segment[] = f.branch === undefined ? [] : [
     { text: ` | 🌿 ${f.branch} ` },
     ...(f.staged ? [{ text: `+${f.staged}`, color: 'green' }] : []),
     ...(f.modified ? [{ text: `~${f.modified}`, color: 'yellow' }] : []),
+    ...(f.untracked ? [{ text: `?${f.untracked}`, color: 'subtle' }] : []),
   ]
 
   return [
@@ -128,3 +179,6 @@ export const rows = (f: StatusFigures): Segment[][] => {
     ],
   ]
 }
+
+// What the person sees is all that counts: the timer shows minutes, so a second that changes nothing drawn is no change
+export const sameRows = (a: StatusFigures, b: StatusFigures) => JSON.stringify(rows(a)) === JSON.stringify(rows(b))
