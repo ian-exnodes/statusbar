@@ -1,0 +1,119 @@
+import { describe, expect, mock, test } from 'claude-code/testing'
+import type { Engine, MockClock } from 'claude-code/testing'
+import type { On } from 'claude-code'
+
+import { CLEAN_VIEW_NOTE } from './clean'
+
+type World = {
+  isClean?: boolean
+  /** What `git status` prints; 'timeout' makes the call reject, 'not-a-repo' exits 128. */
+  git?: string
+  messages?: { role: 'user' | 'assistant'; text: string }[]
+  modelSettings?: Record<string, { effortLevel?: string }>
+  /** usage.startedAt; the mock clock starts at 0. */
+  startedAt?: number
+  gitRuns: string[][]
+  commands: string[]
+  toasts: string[]
+  /** How many times the plugin wrote its `figures` atom. */
+  figureWrites: number
+}
+
+const fresh = (over: Partial<World> = {}): World =>
+  ({ git: '# branch.oid abc1234def\n# branch.head main\n', gitRuns: [], commands: [], toasts: [], figureWrites: 0, ...over })
+
+const ok = (stdout: string, exitCode = 0) =>
+  ({ value: { exitCode, stdout, stderr: exitCode ? 'fatal' : '', isStdoutTruncated: false, isStderrTruncated: false } })
+
+/** Stands in for the engine and git beneath the plugin. */
+function world(on: On, w: World): MockClock {
+  const clock = mock.clock(on, { now: 0 })
+  mock.store(on, w.isClean ? { cleanView: true } : {})
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.cwd', () => ({ value: '/x/statusbar' }))
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.usage', () => ({ value: { startedAt: w.startedAt ?? 0, context: { percent: 10, tokens: 20_000, window: 200_000 }, rateLimits: [] } }))
+  on('session.messages', () => ({ value: (w.messages ?? []).map(m => ({ ...m, toolUses: [] })) }))
+  on('settings.read', () => ({ value: { modelSettings: w.modelSettings ?? {} } as never }))
+  on('agent.list', () => ({ value: [] }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  // Without this, Clean View's checklist tool fails to register, the plugin toasts, and Clean View stays off
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__statusbar__${e.name}` } }))
+  on('command.run', (_$, e) => { w.commands.push(`${e.command} ${e.args}`.trim()); return { text: '' } })
+  on('config.set', () => ({ value: {} as never }))
+  on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context }))
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('ui.toast', (_$, e) => { w.toasts.push(e.text); return { value: undefined } })
+  // The engine's own drawing beneath the plugin: an answer's text, nothing for the rest
+  on('ui.render', { component: 'AssistantMessage' }, ($, e) => { const { Text } = $.ui.resolve(e); return <Text>{e.props.text}</Text> })
+  on('ui.render', ($, e) => { const { Box } = $.ui.resolve(e); return <Box /> })
+  on('state.set', (_$, e, next) => { if (e.key === 'figures') w.figureWrites++; return next(e) })
+  on('process.run', (_$, e) => {
+    if (e.argv[0] !== 'git') return ok('')
+    w.gitRuns.push([...e.argv])
+    if (w.git === 'timeout') return { deny: 'timed out' }
+    if (w.git === 'not-a-repo') return ok('', 128)
+    return ok(w.git ?? '')
+  })
+  return clock
+}
+
+const start = async ($: Engine) => { await $.session.start({ cwd: '/x/statusbar', surface: 'terminal', isInteractive: true }) }
+
+const HINT = { plugin: 'statusbar', surface: 'terminal', component: 'PromptHint', props: { isDraft: false, isWorking: false, hint: '' } } as const
+const BAND = {
+  plugin: 'statusbar', surface: 'terminal', component: 'AbovePrompt',
+  props: { hasSurvey: false, isWorking: false, maxRows: 40, bodyColumns: 120, scroll: { offset: 0, bodyRows: 39 }, view: {} },
+} as const
+const COMPOSER = { kind: 'composer' } as const
+const PLUGIN = { kind: 'plugin', name: 'other' } as const
+const STATUSBAR = { command: 'statusbar', args: '', origin: COMPOSER, presentation: { isFullscreen: false, columns: 120 } } as const
+
+describe('register hooks', () => {
+  test('Clean View adds its planning note once per prompt, and never to a plugin prompt', async ($, on) => {
+    const w = fresh({ isClean: true })
+    world(on, w)
+    await start($)
+    expect(w.toasts).toEqual([])
+    const once = await $.prompt.submit({ text: 'fix the bug', wait: false, origin: COMPOSER })
+    expect(once.context?.filter(c => c === CLEAN_VIEW_NOTE)).toHaveLength(1)
+    const again = await $.prompt.submit({ text: 'and this', wait: false, origin: COMPOSER, context: [CLEAN_VIEW_NOTE] } as never)
+    expect(again.context?.filter(c => c === CLEAN_VIEW_NOTE)).toHaveLength(1)
+    const other = await $.prompt.submit({ text: 'from a plugin', wait: false, origin: PLUGIN } as never)
+    expect(other.context ?? []).not.toContain(CLEAN_VIEW_NOTE)
+  })
+
+  test('the picker closes on a prompt the person sends, not on a plugin one', async ($, on) => {
+    world(on, fresh())
+    await start($)
+    await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Text', text: 'MODEL' })).toBeDefined()
+    await $.prompt.submit({ text: 'from a plugin', wait: false, origin: PLUGIN } as never)
+    await ui.redraw(BAND.props)
+    expect(await ui.find({ type: 'Text', text: 'MODEL' })).toBeDefined()
+    await $.prompt.submit({ text: 'hello', wait: false, origin: COMPOSER })
+    await ui.redraw(BAND.props)
+    expect(await ui.find({ type: 'Text', text: 'MODEL' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('a resumed session shows its earlier final answers through Clean View, not the notes between', async ($, on) => {
+    world(on, fresh({
+      isClean: true,
+      messages: [
+        { role: 'user', text: 'first request' },
+        { role: 'assistant', text: 'Let me look.' },
+        { role: 'assistant', text: 'Done: the bug was in auth.' },
+        { role: 'user', text: 'second request' },
+      ],
+    }))
+    await start($)
+    const answer = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Done: the bug was in auth.', isFirstOfReply: true } })
+    expect(await answer.find({ text: 'Done: the bug was in auth.' })).toBeDefined()
+    await answer.unmount()
+    const note = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', component: 'AssistantMessage', props: { text: 'Let me look.', isFirstOfReply: true } })
+    expect(await note.find({ text: 'Let me look.' })).toBeUndefined()
+    await note.unmount()
+  })
+})
