@@ -17,6 +17,8 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 
 - The context and usage-limit bars are thin and quieter: `━━━╸─` instead of `███░░`, still 5 cells long. A half
   cell (`╸`) shows each 10%, and only the filled part takes the green, yellow or red; the rest is dim.
+- An idle session no longer redraws the status bar every second; it redraws when something on it changes (the
+  timer once a minute). A working Clean View card still counts its seconds.
 
 ### Fixed
 

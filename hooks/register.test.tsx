@@ -161,3 +161,28 @@ describe('git on the status bar', () => {
     await ui.unmount()
   })
 })
+
+describe('the 1s tick', () => {
+  test('an idle second writes nothing; the minute it shows changing writes once', async ($, on) => {
+    const w = fresh({ startedAt: 0 })
+    const clock = world(on, w)
+    await start($)
+    await clock.advance(1_000)
+    const after = w.figureWrites
+    await clock.advance(5_000)
+    expect(w.figureWrites).toBe(after)
+    await clock.advance(60_000 - clock.now())
+    expect(w.figureWrites).toBe(after + 1)
+  })
+
+  test('a working card still gets a write every second, for its seconds timer', async ($, on) => {
+    const w = fresh({ isClean: true })
+    const clock = world(on, w)
+    await start($)
+    await $.prompt.submit({ text: 'fix the bug', wait: false, origin: COMPOSER })
+    await $.turn.start({ text: 'fix the bug', turnId: 't1' })
+    const before = w.figureWrites
+    await clock.advance(3_000)
+    expect(w.figureWrites).toBe(before + 3)
+  })
+})

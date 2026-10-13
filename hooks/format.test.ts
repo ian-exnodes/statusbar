@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, prettyModel, quotaColor, quotas, rows, sameModel, tokens } from './format'
+import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
@@ -170,6 +170,16 @@ describe('statusbar rows', () => {
     const [unknown = []] = rows(base)
     expect(plain(unknown)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(plain(unknown)).not.toContain('undefined')
+  })
+})
+
+describe('the 1s tick', () => {
+  test('figures that draw the same rows are the same, though the clock moved', async () => {
+    expect(sameRows(base, { ...base, ms: base.ms + 1_000 })).toBe(true)
+    expect(sameRows(base, { ...base, usd: 1.2341 })).toBe(true)
+    expect(sameRows({ ...base, ms: 59_000 }, { ...base, ms: 60_000 })).toBe(false)
+    expect(sameRows(base, { ...base, percent: 38 })).toBe(false)
+    expect(sameRows(base, { ...base, quotas: [{ label: '5h', remaining: 50 }] })).toBe(false)
   })
 })
 

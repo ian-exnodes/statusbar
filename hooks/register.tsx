@@ -7,7 +7,7 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, quotas, rows, sameModel } from './format'
+import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, quotas, rows, sameModel, sameRows } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -231,19 +231,24 @@ async function seedTurn($: EngineInterface) {
 // Live figures between events, like a statusLine command re-run by the CLI; git stays on events.
 // The model is read here too: no event reaches a user plugin when it changes (an interactive /model raises
 // no command.run, and cc-plugin-sec-default keeps classic.PostModelSwitch from user-tier plugins)
-// ponytail: updates every second on purpose: the Clean View card's seconds timer redraws with it while nothing animates
+// Writes only when the rows would change (the timer shows minutes), except while a Clean View card works:
+// its seconds timer reads the clock and redraws on this write when nothing on it animates
 async function tick($: EngineInterface) {
-  const [usage, now, model] = await Promise.all([$.session.usage(), $.clock.now(), $.session.model()])
-  await update($, figures, f => f && {
-    ...f,
+  const [usage, now, model, shown, isOn, c] = await Promise.all([
+    $.session.usage(), $.clock.now(), $.session.model(), read($, figures), read($, cleanView), read($, checklist),
+  ])
+  const live = {
     model,
     percent: usage.context.percent ?? 0,
     tokensIn: usage.context.tokens ?? 0,
     usd: usage.cost?.usd ?? 0,
     ms: now - usage.startedAt,
     quotas: quotas(usage.rateLimits),
-  })
-  const [isOn, c] = await Promise.all([read($, cleanView), read($, checklist)])
+  }
+  const isTiming = isOn && c !== null && c.endedAt === undefined
+  if (shown !== null && (isTiming || !sameRows(shown, { ...shown, ...live }))) {
+    await update($, figures, f => f && { ...f, ...live })
+  }
   if (isOn && c?.agents?.length) {
     const agents = await $.agent.list()
     await update($, agentStatus, prev => agentStatuses(prev, agents, (c.agents ?? []).map(a => a.id)))

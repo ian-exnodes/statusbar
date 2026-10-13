@@ -154,3 +154,6 @@ export const rows = (f: StatusFigures): Segment[][] => {
     ],
   ]
 }
+
+// What the person sees is all that counts: the timer shows minutes, so a second that changes nothing drawn is no change
+export const sameRows = (a: StatusFigures, b: StatusFigures) => JSON.stringify(rows(a)) === JSON.stringify(rows(b))
