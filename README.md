@@ -106,11 +106,11 @@ shows `◐ Clean`. Claude's tool calls, their results, code changes and its in-b
 request, a checklist card above the prompt, and Claude's final answer:
 
     ╭──────────────────────────────────────────────────╮
-    │ ✧ Build a weather dashboard for New…  [ Details ] │
+    │ ✧ Build a weather dashboard for New… [ Details ] │
     │ Step 2 of 4   ▓▓▓▓▓░░░░░░░░░░░░░░░               │
     │ ✓ Pick the page style and layout          Done   │
-    │ ⠹ Check how the page gets live weather Working   │
-    │   ▱▱▰▰▰▱▱▱▱▱▱▱ Looking things up…                 │
+    │ ◐ Check how the page gets live weather Working   │
+    │   ▱▱▰▰▰▱▱▱▱▱▱▱ Looking things up…                │
     │ ○ Build the weather dashboard             Next   │
     │ ○ Publish it and share the link        Up next   │
     ╰──────────────────────────────────────────────────╯
