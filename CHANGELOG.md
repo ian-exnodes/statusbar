@@ -11,7 +11,7 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
-## Unreleased
+## 0.9.2 (2026-10-19)
 
 ### Added
 
