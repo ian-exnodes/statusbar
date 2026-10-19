@@ -13,6 +13,11 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 
 ## Unreleased
 
+### Added
+
+- `↻` after `↓` on the status bar: input tokens read from the prompt cache, summed over the turns since the
+  plugin loaded.
+
 ### Changed
 
 - The context and usage-limit bars are thin and quieter: `━━━╸─` instead of `███░░`, still 5 cells long. A half

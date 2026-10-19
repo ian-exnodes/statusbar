@@ -4,7 +4,7 @@ A Claude Code plugin (a "mod") that draws a colored, live status line under the 
 
 ```
 [Opus 5.5] high [ ⚙ Command ] | 📁 main-2 | 🌿 main +1~2
-Context ━──── 21% | Limit 5h ━━━╸─ 76% | Limit 7d ━━━━╸ 92% | ↑ 208.1k ↓ 36.8k | $5.79 | ⏱️ 52m | ▲ +21.4k last turn
+Context ━──── 21% | Limit 5h ━━━╸─ 76% | Limit 7d ━━━━╸ 92% | ↑ 208.1k ↓ 36.8k ↻ 1.2M | $5.79 | ⏱️ 52m | ▲ +21.4k last turn
 ```
 
 It sits below the prompt, under Claude Code's own mode line (`▸▸ bypass permissions on …`).
@@ -75,6 +75,7 @@ claude plugin marketplace remove ian-exnodes
 | `Limit 7d ━━━━╸ 92%` | **Weekly (7-day) usage limit left.** Same bar and colors as the 5h one. |
 | `↑ 208.1k` (cyan) | Input tokens the latest model response read: the whole conversation, system prompt and tools. This is what fills the context bar. |
 | `↓ 36.8k` (yellow) | Output tokens the model has written, summed over every turn since the plugin loaded in this session. |
+| `↻ 1.2M` (green) | Input tokens read from the prompt cache, summed over every turn since the plugin loaded in this session. |
 | `$5.79` (magenta) | Estimated cost of the session at API list prices. On a Claude subscription you are not billed this; it shows how much usage the session represents. |
 | `⏱️ 52m` | Time since the session started, in minutes, then hours and minutes (`3h 19m`) (a resumed session counts from its first launch). |
 | `▲ +21.4k last turn` (gray) | How much the context grew during the last turn: context size now minus after the turn before. `▼ -N` means it shrank, for example after a compaction. The first turn of a new session counts from an empty context. |
@@ -134,7 +135,7 @@ for example with bypass permissions or broad allow rules, keep Clean View off or
 ## When it updates
 
 - Every second: context %, quotas, `↑`, `$`, the timer, and the model.
-- At session start and after each turn: model, folder, git branch and counts, `↓`, and `last turn`.
+- At session start and after each turn: model, folder, git branch and counts, `↓`, `↻`, and `last turn`.
 - Right after `/model` or `/effort`, typed or picked: model and effort.
 
 ## Your own status line

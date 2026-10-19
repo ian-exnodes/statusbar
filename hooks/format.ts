@@ -172,6 +172,8 @@ export const rows = (f: StatusFigures): Segment[][] => {
       { text: `↑ ${tokens(f.tokensIn)}`, color: 'cyan' },
       { text: ' ' },
       { text: `↓ ${tokens(f.tokensOut)}`, color: 'yellow' },
+      { text: ' ' },
+      { text: `↻ ${tokens(f.cacheRead)}`, color: 'green' },
       { text: ' | ' },
       { text: `$${f.usd.toFixed(2)}`, color: 'magenta' },
       { text: ` | ⏱️ ${duration(f.ms)}` },

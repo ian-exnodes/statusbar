@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
-  percent: 37, tokensIn: 45_230, tokensOut: 1_200, usd: 1.234, ms: 125_000, quotas: [] }
+  percent: 37, tokensIn: 45_230, tokensOut: 1_200, cacheRead: 38_100, usd: 1.234, ms: 125_000, quotas: [] }
 const plain = (r: { text: string }[]) => r.map(s => s.text).join('')
 const colorOf = (r: { text: string; color?: string }[], text: string) => r.find(s => s.text.includes(text))?.color
 
@@ -30,12 +30,13 @@ describe('statusbar rows', () => {
     const [top = [], bottom = []] = rows(base)
     expect(plain(top)).toBe('[Opus 5.5] ⚙ Command | 📁 main-2 | 🌿 main +1~2?3')
     expect(colorOf(top, '?3')).toBe('subtle')
-    expect(plain(bottom)).toBe('Context ━╸─── 37% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m')
+    expect(plain(bottom)).toBe('Context ━╸─── 37% | ↑ 45.2k ↓ 1.2k ↻ 38.1k | $1.23 | ⏱️ 2m')
     expect(colorOf(top, 'Opus')).toBe('magenta')
     expect(colorOf(top, '+1')).toBe('green')
     expect(colorOf(top, '~2')).toBe('yellow')
     expect(colorOf(bottom, '↑')).toBe('cyan')
     expect(colorOf(bottom, '↓')).toBe('yellow')
+    expect(colorOf(bottom, '↻')).toBe('green')
     expect(colorOf(bottom, '$')).toBe('magenta')
   })
 
@@ -60,7 +61,7 @@ describe('statusbar rows', () => {
     expect(quotas([{ kind: 'five_hour', percentUsed: 104 }])).toEqual([{ label: '5h', remaining: 0 }])
 
     const [, bottom = []] = rows({ ...base, quotas: [{ label: '5h', remaining: 76 }, { label: '7d', remaining: 8 }] })
-    expect(plain(bottom)).toBe('Context ━╸─── 37% | Limit 5h ━━━╸─ 76% | Limit 7d ───── 8% | ↑ 45.2k ↓ 1.2k | $1.23 | ⏱️ 2m')
+    expect(plain(bottom)).toBe('Context ━╸─── 37% | Limit 5h ━━━╸─ 76% | Limit 7d ───── 8% | ↑ 45.2k ↓ 1.2k ↻ 38.1k | $1.23 | ⏱️ 2m')
     expect(colorOf(bottom, '━━━╸')).toBe('green')
   })
 
