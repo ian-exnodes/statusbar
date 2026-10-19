@@ -11,6 +11,7 @@ import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
+const cacheRead = atom({ plugin: 'statusbar', key: 'cacheRead' } as const, 0)
 const lastTurnTokens = atom({ plugin: 'statusbar', key: 'lastTurnTokens' } as const, null)
 const turnDelta = atom({ plugin: 'statusbar', key: 'turnDelta' } as const, null)
 const effort = atom({ plugin: 'statusbar', key: 'effort' } as const, null)
@@ -179,9 +180,9 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
 }
 
 async function refresh($: EngineInterface) {
-  const [model, dir, usage, now, out, delta, picked, settings] = await Promise.all([
-    $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, turnDelta),
-    read($, effort), $.settings.read(),
+  const [model, dir, usage, now, out, cached, delta, picked, settings] = await Promise.all([
+    $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, cacheRead),
+    read($, turnDelta), read($, effort), $.settings.read(),
   ])
   // undefined: git timed out or could not start, so the last figures stay; null: not a repo
   const status = await $.process.run(GIT_STATUS, { timeoutMs: GIT_TIMEOUT_MS }).catch(() => undefined)
@@ -201,6 +202,7 @@ async function refresh($: EngineInterface) {
       percent: usage.context.percent ?? 0,
       tokensIn: usage.context.tokens ?? 0,
       tokensOut: out,
+      cacheRead: cached,
       usd: usage.cost?.usd ?? 0,
       ms: now - usage.startedAt,
       turnDelta: delta ?? undefined,
@@ -291,6 +293,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     // ponytail: counts from install; the engine exposes no session-wide output total
     await update($, tokensOut, n => n + (e.usage?.output_tokens ?? 0))
+    await update($, cacheRead, n => n + (e.usage?.cache_read_input_tokens ?? 0))
     const r = await next(e)
     await recordTurn($)
     await endCleanTurn($, e)

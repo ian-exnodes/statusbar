@@ -41,6 +41,8 @@ export type StatusFigures = {
   percent: number
   tokensIn: number
   tokensOut: number
+  /** Input tokens the prompt cache served, summed over turns since install (same ceiling as tokensOut). */
+  cacheRead: number
   usd: number
   ms: number
   /** Context tokens the last turn added (negative after a compaction); absent before a second turn. */
@@ -56,6 +58,7 @@ declare module 'claude-code' {
     'statusbar': {
       figures: StatusFigures | null
       tokensOut: number
+      cacheRead: number
       lastTurnTokens: number | null
       turnDelta: number | null
       effort: StatusEffort | null
