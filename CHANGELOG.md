@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.3 (2026-10-22)
+
+### Fixed
+
+- `⚙ Command` could not be clicked where Claude Code does not pass clicks to plugins: its normal (non-fullscreen)
+  screen, which Windows over SSH always uses, as do tmux and `CLAUDE_CODE_NO_FLICKER=0`. There the row now shows
+  `⚙ /statusbar`: type `/statusbar` to open the picker. Fullscreen and the desktop app keep the button.
+
 ## 0.9.2 (2026-10-19)
 
 ### Added
