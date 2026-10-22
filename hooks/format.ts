@@ -142,9 +142,11 @@ export const parseGitStatus = (stdout: string): GitFigures => {
   return { branch: head === '(detached)' ? `(${oid.slice(0, 7)})` : head, ...n }
 }
 
-export const rows = (f: StatusFigures): Segment[][] => {
+// isPlain: words for the icons, for terminal fonts that draw them as boxes (Windows)
+export const rows = (f: StatusFigures, isPlain = false): Segment[][] => {
+  const icon = (glyph: string) => isPlain ? '' : `${glyph} `
   const git: Segment[] = f.branch === undefined ? [] : [
-    { text: ` | 🌿 ${f.branch} ` },
+    { text: ` | ${icon('🌿')}${f.branch} ` },
     ...(f.staged ? [{ text: `+${f.staged}`, color: 'green' }] : []),
     ...(f.modified ? [{ text: `~${f.modified}`, color: 'yellow' }] : []),
     ...(f.untracked ? [{ text: `?${f.untracked}`, color: 'subtle' }] : []),
@@ -155,9 +157,9 @@ export const rows = (f: StatusFigures): Segment[][] => {
       { text: `[${prettyModel(f.model)}]`, color: modelColor(f.model) },
       ...(f.effort ? [{ text: ` ${f.effort}`, color: effortColor(f.effort) }] : []),
       { text: ' ' },
-      { text: '⚙ Command', isPicker: true },
-      ...(f.isClean ? [{ text: ' ◐ Clean', color: 'green' }] : []),
-      { text: ` | 📁 ${f.dir.split('/').pop()}` },
+      { text: `${icon('⚙')}Command`, isPicker: true },
+      ...(f.isClean ? [{ text: ` ${icon('◐')}Clean`, color: 'green' }] : []),
+      { text: ` | ${icon('📁')}${f.dir.split('/').pop()}` },
       ...git,
     ],
     [
@@ -173,10 +175,10 @@ export const rows = (f: StatusFigures): Segment[][] => {
       { text: ' ' },
       { text: `↓ ${tokens(f.tokensOut)}`, color: 'yellow' },
       { text: ' ' },
-      { text: `↻ ${tokens(f.cacheRead)}`, color: 'green' },
+      { text: `${isPlain ? 'cache' : '↻'} ${tokens(f.cacheRead)}`, color: 'green' },
       { text: ' | ' },
       { text: `$${f.usd.toFixed(2)}`, color: 'magenta' },
-      { text: ` | ⏱️ ${duration(f.ms)}` },
+      { text: ` | ${icon('⏱️')}${duration(f.ms)}` },
       ...(f.turnDelta === undefined ? [] : [{ text: ' | ' }, { text: turnDelta(f.turnDelta), color: 'subtle' }]),
     ],
   ]
