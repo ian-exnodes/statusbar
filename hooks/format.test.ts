@@ -91,6 +91,15 @@ describe('statusbar rows', () => {
     expect(plain(off)).not.toContain('◐')
   })
 
+  test('plain rows swap the icons for words and keep the bars and arrows', async () => {
+    const [top = [], bottom = []] = rows({ ...base, isClean: true }, true)
+    const text = plain(top) + plain(bottom)
+    for (const glyph of ['⚙', '📁', '🌿', '↻', '⏱️', '◐']) expect(text).not.toContain(glyph)
+    expect(plain(top)).toBe('[Opus 5.5] Command Clean | main-2 | main +1~2?3')
+    expect(plain(bottom)).toBe('Context ━╸─── 37% | ↑ 45.2k ↓ 1.2k cache 38.1k | $1.23 | 2m')
+    expect(top.find(s => s.isPicker)?.text).toBe('Command')
+  })
+
   test('no git segment outside a repo', async () => {
     const [top = []] = rows({ ...base, branch: undefined })
     expect(plain(top)).not.toContain('🌿')

@@ -131,6 +131,18 @@ on screen; only permission prompts reach you. Until you click `[ Details ]`, the
 (`Running a command…`, `Editing register.tsx…`) and the files-changed count. If you rely on watching each command,
 for example with bypass permissions or broad allow rules, keep Clean View off or open Details.
 
+## Windows
+
+Many Windows terminal fonts have no glyph for the icons, so `⚙ 📁 🌿 ↻ ⏱️` show as empty boxes. The **Icons** option (`/plugin`, statusbar) picks what to draw:
+
+- `auto` (default): plain text on Windows, icons elsewhere. Plain text reads `Command`, `main-2`, `cache 38.1k`, `2m`.
+- `emoji`: always the icons.
+- `plain`: never.
+
+For the icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or install a Nerd Font, then set Icons to `emoji`.
+
+Clicking `Command` only works in Claude Code's fullscreen layout. Add `"tui": "fullscreen"` to `~/.claude/settings.json` to turn it on; over SSH to Windows Claude Code keeps it off, so type `/statusbar` instead. Once per install, a toast on Windows says all this.
+
 ## When it updates
 
 - Every second: context %, quotas, `↑`, `$`, the timer, and the model.

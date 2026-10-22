@@ -266,13 +266,31 @@ async function animate($: EngineInterface) {
   if (isOn && isMoving) await update($, frame, n => n + 1)
 }
 
-export const register: Register = on => {
+// One toast per install: the flag lives in the cross-session store; isHinted spares the store while renders repeat
+let isHinted = false
+const hintOnce = async ($: EngineInterface) => {
+  if (isHinted) return
+  isHinted = true
+  if (await $.store.get('windowsHint') === true) return
+  await $.store.set('windowsHint', true)
+  void $.ui.toast(WINDOWS_HINT, { timeoutMs: 20000 })
+}
+
+const WINDOWS_HINT = 'statusbar: icons are plain text on Windows. For icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or use a Nerd Font, then set Icons to emoji in /plugin. To click ⚙ Command, add "tui": "fullscreen" to ~/.claude/settings.json (not over SSH).'
+
+export const register: Register = (on, options) => {
+  // Resolved at session start: Windows terminals often lack a font for the icons
+  let isPlain = options.glyphs === 'plain'
+  let isWindows = false
   let ticker: { cancel: () => void } | undefined
   let animator: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     const r = await next(e)
     await $.command.register({ name: 'statusbar', description: 'Open or close the model and effort picker' })
+    isWindows = (await $.env.get('OS')) === 'Windows_NT'
+    isPlain = options.glyphs === 'plain' || (options.glyphs !== 'emoji' && isWindows)
+    if (isPlain && options.glyphs !== 'plain') await hintOnce($)
     await loadCleanView($)
     if (await read($, cleanView)) await registerChecklist($)
     await seedTurn($)
@@ -329,13 +347,14 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     // On the terminal clicks only reach a Button in fullscreen; on the main screen show the command to type
     const canClick = e.surface !== 'terminal' || e.viewport?.isFullscreen !== false
+    if (!canClick && isWindows) void hintOnce($)
 
     return (
       <Box flexDirection="column">
-        {rows({ ...f, isClean }).map((row, i) => (
+        {rows({ ...f, isClean }, isPlain).map((row, i) => (
           <Box key={`row${i}`}>
             {row.map((s, j) => s.isPicker && !canClick
-              ? <Text key="picker">⚙ /statusbar</Text>
+              ? <Text key="picker">{isPlain ? '/statusbar' : '⚙ /statusbar'}</Text>
               : s.isPicker
               ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
               : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}

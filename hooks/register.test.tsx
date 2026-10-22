@@ -6,6 +6,10 @@ import { CLEAN_VIEW_NOTE } from './clean'
 
 type World = {
   isClean?: boolean
+  /** More of what the plugin's store holds at the start. */
+  store?: Record<string, unknown>
+  /** The environment variables the plugin reads. */
+  env?: Record<string, string>
   /** What `git status` prints; 'timeout' makes the call reject, 'not-a-repo' exits 128. */
   git?: string
   messages?: { role: 'user' | 'assistant'; text: string }[]
@@ -28,7 +32,8 @@ const ok = (stdout: string, exitCode = 0) =>
 /** Stands in for the engine and git beneath the plugin. */
 function world(on: On, w: World): MockClock {
   const clock = mock.clock(on, { now: 0 })
-  mock.store(on, w.isClean ? { cleanView: true } : {})
+  mock.store(on, { ...(w.isClean ? { cleanView: true } : {}), ...w.store })
+  on('env.get', (_$, e) => ({ value: w.env?.[e.name] }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: '/x/statusbar' }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
@@ -150,6 +155,67 @@ describe('the picker button', () => {
     expect(await band.find({ type: 'Text', text: 'MODEL' })).toBeDefined()
     await band.unmount()
     await ui.unmount()
+  })
+})
+
+describe('icons on Windows', () => {
+  const VIEW = { columns: 120, rows: 40 }
+  const MAIN = { ...HINT, viewport: { ...VIEW, isFullscreen: false } }
+  const text = async (ui: Awaited<ReturnType<Engine['ui']['mount']>>, t: string) => (await ui.find({ type: 'Text', text: t })) !== undefined
+
+  test('auto is plain where OS is Windows_NT, with /statusbar to type', async ($, on) => {
+    world(on, fresh({ env: { OS: 'Windows_NT' } }))
+    await start($)
+    const ui = await $.ui.mount(MAIN)
+    expect(await text(ui, '/statusbar')).toBe(true)
+    expect(await text(ui, '⚙ /statusbar')).toBe(false)
+    expect(await text(ui, '🌿')).toBe(false)
+    expect(await text(ui, ' | statusbar')).toBe(true)
+    await ui.unmount()
+  })
+
+  test('auto is emoji without it, and emoji or plain win over the system', async ($, on) => {
+    world(on, fresh())
+    await start($)
+    const ui = await $.ui.mount(MAIN)
+    expect(await text(ui, '⚙ /statusbar')).toBe(true)
+    await ui.unmount()
+  })
+
+  test('emoji keeps the icons on Windows', { options: { glyphs: 'emoji' } }, async ($, on) => {
+    world(on, fresh({ env: { OS: 'Windows_NT' } }))
+    await start($)
+    const ui = await $.ui.mount(MAIN)
+    expect(await text(ui, '⚙ /statusbar')).toBe(true)
+    await ui.unmount()
+  })
+
+  test('plain drops the icons off Windows', { options: { glyphs: 'plain' } }, async ($, on) => {
+    const w = fresh()
+    world(on, w)
+    await start($)
+    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: true } })
+    expect(await ui.find({ type: 'Button', text: 'Command' })).toBeDefined()
+    await ui.unmount()
+    expect(w.toasts).toEqual([])
+  })
+
+  test('the font and click hint shows once per install', async ($, on) => {
+    const w = fresh({ env: { OS: 'Windows_NT' } })
+    world(on, w)
+    await start($)
+    expect(w.toasts.filter(t => t.includes('plain text on Windows'))).toHaveLength(1)
+    await start($)
+    const ui = await $.ui.mount(MAIN)
+    await ui.unmount()
+    expect(w.toasts.filter(t => t.includes('plain text on Windows'))).toHaveLength(1)
+  })
+
+  test('a stored flag keeps the hint away', async ($, on) => {
+    const w = fresh({ store: { windowsHint: true }, env: { OS: 'Windows_NT' } })
+    world(on, w)
+    await start($)
+    expect(w.toasts).toEqual([])
   })
 })
 
