@@ -131,15 +131,18 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
   // ▰ cells in the accent (red with a failed agent), ▱ cells dim; then an agent row each
   const groupRows = (g: CardGroup, key: string) => (
     <Box key={key} flexDirection="column" paddingLeft={2}>
-      <Text>
-        {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
-          ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
-        {g.label && <Text color={g.color} dimColor={!g.color}> {g.label}</Text>}
-      </Text>
+      <Box>
+        <Text>
+          {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
+            ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
+        </Text>
+        {/* A margin, not a leading space: the label's space was lost and it ran into the cells */}
+        {g.label && <Box marginLeft={1}><Text color={g.color} dimColor={!g.color}>{g.label}</Text></Box>}
+      </Box>
       {g.agents.map((a, i) => (
         <Box key={`agent${i}`}>
           <Box flexGrow={1}><Text color={a.color}>{a.mark} {a.subject}</Text></Box>
-          <Text color={a.color} dimColor={a.label === 'Done'}>  {a.label}</Text>
+          <Box marginLeft={2}><Text color={a.color} dimColor={a.label === 'Done'}>{a.label}</Text></Box>
         </Box>
       ))}
       {g.more > 0 && <Text dimColor>+{g.more} more</Text>}
@@ -169,7 +172,7 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
             <Box flexGrow={1}>
               <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.mark} {row.subject}</Text>
             </Box>
-            <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
+            <Box marginLeft={2}><Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.label}</Text></Box>
           </Box>
           {row.group && groupRows(row.group, `group${i}`)}
         </Box>
