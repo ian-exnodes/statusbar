@@ -58,7 +58,7 @@ claude plugin marketplace remove ian-exnodes
 |---|---|
 | `[Opus 5.5]` | The model this session runs on, colored by family: Opus magenta, Sonnet blue, Haiku green, Fable yellow. Other models are cyan. |
 | `high` | The session's reasoning effort, colored by cost: low gray, medium cyan, high yellow, xhigh orange, max red. Hidden until known. |
-| `[ ⚙ Command ]` | A button: opens the model and effort picker. |
+| `[ ⚙ Command ]` | A button: opens the model and effort picker. Clicks only reach it in Claude Code's fullscreen layout; on the main screen (including Windows over SSH) the row shows `⚙ /statusbar` instead: type `/statusbar`. |
 | `📁 main-2` | The last folder of the session's working directory. |
 | `🌿 main` | The current git branch. Hidden outside a git repo. |
 | `+1` (green) | Files with **staged** changes. |
@@ -98,6 +98,8 @@ long conversation, where the new model reads the whole conversation again, or Fa
 runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort`: it applies to
 the session at once and also becomes that model's default effort for new sessions, as typing `/effort` does.
 Claude Code prints nothing for it in the transcript; the status bar shows the new level.
+Clicks only reach the button in Claude Code's fullscreen layout. On the main screen (including Windows over SSH) the row shows `⚙ /statusbar`: type `/statusbar` to open the picker.
+
 It closes on `✕`, pressing `⚙ Command` again, `/statusbar`, or when you send a message. Esc does not close it: Claude Code does not pass Esc to a plugin's box above the prompt.
 
 ### Clean View

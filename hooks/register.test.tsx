@@ -119,6 +119,31 @@ describe('register hooks', () => {
   })
 })
 
+describe('the picker button', () => {
+  const VIEW = { columns: 120, rows: 40 }
+
+  test('on the main screen clicks cannot reach it, so the row shows /statusbar to type', async ($, on) => {
+    world(on, fresh())
+    await start($)
+    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: false } } as never)
+    expect(await ui.find({ type: 'Text', text: '⚙ /statusbar' })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: '⚙ Command' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('in fullscreen it is a button, and pressing it opens the picker', async ($, on) => {
+    world(on, fresh())
+    await start($)
+    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: true } } as never)
+    expect(await ui.find({ type: 'Text', text: '⚙ /statusbar' })).toBeUndefined()
+    await ui.press({ key: 'picker' })
+    const band = await $.ui.mount(BAND)
+    expect(await band.find({ type: 'Text', text: 'MODEL' })).toBeDefined()
+    await band.unmount()
+    await ui.unmount()
+  })
+})
+
 describe('git on the status bar', () => {
   const v2 = '# branch.oid 1234567890abcdef\n# branch.head main\n1 M. N... 1 1 1 a b x.ts\n1 .M N... 1 1 1 a b y.ts\n? z.md\n'
 
