@@ -170,7 +170,8 @@ describe('icons on Windows', () => {
     expect(await text(ui, '/statusbar')).toBe(true)
     expect(await text(ui, '⚙ /statusbar')).toBe(false)
     expect(await text(ui, '🌿')).toBe(false)
-    expect(await text(ui, ' | statusbar')).toBe(true)
+    expect(await ui.find({ type: 'Text', text: /^statusbar$/ })).toBeDefined()
+    expect(await text(ui, '📁')).toBe(false)
     await ui.unmount()
   })
 

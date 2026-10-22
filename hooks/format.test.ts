@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
+import { barColor, chunks, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, cacheRead: 38_100, usd: 1.234, ms: 125_000, quotas: [] }
@@ -8,6 +8,22 @@ const plain = (r: { text: string }[]) => r.map(s => s.text).join('')
 const colorOf = (r: { text: string; color?: string }[], text: string) => r.find(s => s.text.includes(text))?.color
 
 describe('statusbar rows', () => {
+
+  test('a Windows path shows only its last folder', async () => {
+    expect(plain(rows({ ...base, dir: 'D:\\c4k-website-2026\\c4k-website' })[0]!)).toContain('| 📁 c4k-website |')
+  })
+
+  test('a row splits into whole items after each " | ", so a narrow screen wraps items, not words', async () => {
+    const row = rows({ ...base, quotas: [{ label: '5h', remaining: 94 }] })[1]!
+    const items = chunks(row)
+    expect(items.map(plain)).toEqual([
+      'Context ━╸─── 37% | ', 'Limit 5h ━━━━╸ 94% | ', '↑ 45.2k ↓ 1.2k ↻ 38.1k | ', '$1.23 | ', '⏱️ 2m'])
+    expect(items.flat().map(s => s.text).join('')).toBe(plain(row))
+    expect(colorOf(items[2]!, '↑')).toBe('cyan')
+    const first = chunks(rows(base)[0]!)
+    expect(first[0]!.some(s => s.isPicker)).toBe(true)
+    expect(first.map(plain).at(-1)).toBe('🌿 main +1~2?3')
+  })
   test('model ids read the way the old statusline.sh showed them', async () => {
     expect(prettyModel('claude-opus-5-5')).toBe('Opus 5.5')
     expect(prettyModel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5')

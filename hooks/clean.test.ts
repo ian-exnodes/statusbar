@@ -255,6 +255,7 @@ describe('clean view', () => {
     expect(activityOf('Grep', {})).toBe('Reading files…')
     expect(activityOf('Edit', { file_path: '/x/hooks/register.tsx' })).toBe('Editing register.tsx…')
     expect(activityOf('Write', { file_path: 'notes.md' })).toBe('Editing notes.md…')
+    expect(activityOf('Edit', { file_path: 'D:\\x\\hooks\\format.ts' })).toBe('Editing format.ts…')
     expect(activityOf('Bash', { command: 'ls' })).toBe('Running a command…')
     expect(activityOf('Agent', {})).toBe('Starting helpers…')
     expect(activityOf('WebSearch', {})).toBe('Looking things up…')

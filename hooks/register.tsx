@@ -7,7 +7,7 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
+import { EFFORTS, GIT_STATUS, chunks, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -353,12 +353,17 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         {rows({ ...f, isClean }, isPlain).map((row, i) => (
-          <Box key={`row${i}`}>
-            {row.map((s, j) => s.isPicker && !canClick
-              ? <Text key="picker">{isPlain ? '/statusbar' : '⚙ /statusbar'}</Text>
-              : s.isPicker
-              ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
-              : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}
+          // Whole items wrap to the next line on a narrow screen; none shrinks into a column of broken words
+          <Box key={`row${i}`} flexWrap="wrap">
+            {chunks(row).map((item, c) => (
+              <Box key={`item${c}`} flexShrink={0}>
+                {item.map((s, j) => s.isPicker && !canClick
+                  ? <Text key="picker">{isPlain ? '/statusbar' : '⚙ /statusbar'}</Text>
+                  : s.isPicker
+                  ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
+                  : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}
+              </Box>
+            ))}
           </Box>
         ))}
         {hint}

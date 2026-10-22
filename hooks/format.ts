@@ -159,7 +159,7 @@ export const rows = (f: StatusFigures, isPlain = false): Segment[][] => {
       { text: ' ' },
       { text: `${icon('⚙')}Command`, isPicker: true },
       ...(f.isClean ? [{ text: ` ${icon('◐')}Clean`, color: 'green' }] : []),
-      { text: ` | ${icon('📁')}${f.dir.split('/').pop()}` },
+      { text: ` | ${icon('📁')}${f.dir.split(/[\\/]/).pop()}` },
       ...git,
     ],
     [
@@ -185,4 +185,17 @@ export const rows = (f: StatusFigures, isPlain = false): Segment[][] => {
 }
 
 // What the person sees is all that counts: the timer shows minutes, so a second that changes nothing drawn is no change
-export const sameRows = (a: StatusFigures, b: StatusFigures) => JSON.stringify(rows(a)) === JSON.stringify(rows(b))
+// A row's items, each ending after its " | ": drawn unshrunk in a wrapping row, a narrow screen moves a whole
+// item to the next line instead of squeezing every segment into a column of broken words
+export const chunks = (row: Segment[]): Segment[][] => {
+  const out: Segment[][] = [[]]
+  for (const s of row) {
+    for (const piece of s.text.split(/(?<= \| )/)) {
+      out.at(-1)!.push({ ...s, text: piece })
+      if (piece.endsWith(' | ')) out.push([])
+    }
+  }
+  return out.filter(c => c.length)
+}
+
+export const sameRows =(a: StatusFigures, b: StatusFigures) => JSON.stringify(rows(a)) === JSON.stringify(rows(b))
