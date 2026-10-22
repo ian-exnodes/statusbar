@@ -327,12 +327,16 @@ export const register: Register = on => {
     if (f === null) return hint
 
     const { Box, Text, Button } = $.ui.resolve(e)
+    // On the terminal clicks only reach a Button in fullscreen; on the main screen show the command to type
+    const canClick = e.surface !== 'terminal' || e.viewport?.isFullscreen !== false
 
     return (
       <Box flexDirection="column">
         {rows({ ...f, isClean }).map((row, i) => (
           <Box key={`row${i}`}>
-            {row.map((s, j) => s.isPicker
+            {row.map((s, j) => s.isPicker && !canClick
+              ? <Text key="picker">⚙ /statusbar</Text>
+              : s.isPicker
               ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
               : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}
           </Box>
