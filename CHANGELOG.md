@@ -11,6 +11,23 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.4 (2026-10-22)
+
+### Added
+
+- On Windows' normal screen, a question above the prompt makes `⚙ Command` clickable with one key: type `1` and
+  Claude Code switches to fullscreen (where clicks reach the button), `2` to keep typing `/statusbar`. It asks until
+  answered, never while Claude works, and not over SSH. `/tui default` undoes it. See the README's Windows section.
+
+### Fixed
+
+- On a narrow screen, whole items wrap to the next line instead of every word breaking into its own column.
+- On Windows the folder shows its name (`c4k-website`), not the whole path, and Clean View's `Editing <file>…`
+  names the file.
+- Clean View's activity line has a space after its bar (`▱▰▰▱ Running a command…`).
+- Toasts no longer repeat `statusbar:`, and the Windows tip now says `CLAUDE_CODE_NO_FLICKER=1` makes the button
+  clickable over SSH.
+
 ## 0.9.3 (2026-10-22)
 
 ### Added
