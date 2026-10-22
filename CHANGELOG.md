@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.5 (2026-10-22)
+
+### Fixed
+
+- On Windows, typing `1` did not answer the fullscreen question: the digit landed in the prompt instead of pressing
+  the button. Now `1` or `yes` (and `2` or `no`) sent with Enter answers it, and is not sent to Claude. While Claude
+  is working the question is hidden, so a `1` you send then goes to Claude as usual.
+
 ## 0.9.4 (2026-10-22)
 
 ### Added

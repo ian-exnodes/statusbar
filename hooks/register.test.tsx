@@ -358,6 +358,44 @@ describe('fullscreen offer on Windows', () => {
     await ui.unmount()
   })
 
+  const typed = (said: string, isYes: boolean) =>
+    test(`sending "${said}" answers it ${isYes ? 'yes' : 'no'}, and it never reaches Claude`, async ($, on) => {
+      const w = fresh({ env: WIN })
+      world(on, w)
+      await start($)
+      const ui = await $.ui.mount(MAIN_BAND)
+      const r = await $.prompt.submit({ text: said, wait: false, origin: COMPOSER })
+      expect(r.drop).toBeDefined()
+      await ui.redraw(MAIN_BAND.props)
+      expect(w.commands.includes('tui fullscreen')).toBe(isYes)
+      expect(await offer(ui)).toBeUndefined()
+      await ui.unmount()
+    })
+  typed('1', true)
+  typed(' Yes ', true)
+  typed('no', false)
+
+  test('with no offer showing, 1 is an ordinary prompt', async ($, on) => {
+    const w = fresh({ env: WIN, store: { fullscreenAsked: true } })
+    world(on, w)
+    await start($)
+    const ui = await $.ui.mount(MAIN_BAND)
+    const r = await $.prompt.submit({ text: '1', wait: false, origin: COMPOSER })
+    expect(r.drop).toBeUndefined()
+    expect(w.commands).not.toContain('tui fullscreen')
+    await ui.unmount()
+  })
+
+  test('while Claude works the question is hidden, so 1 goes to Claude', async ($, on) => {
+    const w = fresh({ env: WIN })
+    world(on, w)
+    await start($)
+    const ui = await $.ui.mount({ ...MAIN_BAND, props: { ...MAIN_BAND.props, isWorking: true } })
+    const r = await $.prompt.submit({ text: '1', wait: false, origin: COMPOSER })
+    expect(r.drop).toBeUndefined()
+    await ui.unmount()
+  })
+
   const none = (name: string, over: Partial<World>, mount: typeof MAIN_BAND) =>
     test(`no offer ${name}`, async ($, on) => {
       world(on, fresh(over))
