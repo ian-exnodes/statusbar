@@ -266,7 +266,7 @@ async function animate($: EngineInterface) {
   if (isOn && isMoving) await update($, frame, n => n + 1)
 }
 
-// One toast per install: the flag lives in the cross-session store; isHinted spares the store while renders repeat
+// One toast per install: the flag lives in the cross-session store; isHinted also stops a second toast within a session (renders repeat, session.start can run again)
 let isHinted = false
 const hintOnce = async ($: EngineInterface) => {
   if (isHinted) return
@@ -280,6 +280,7 @@ const WINDOWS_HINT = 'statusbar: icons are plain text on Windows. For icons, run
 
 export const register: Register = (on, options) => {
   // Resolved at session start: Windows terminals often lack a font for the icons
+  const isAuto = options.glyphs !== 'emoji' && options.glyphs !== 'plain'
   let isPlain = options.glyphs === 'plain'
   let isWindows = false
   let ticker: { cancel: () => void } | undefined
@@ -290,7 +291,7 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'statusbar', description: 'Open or close the model and effort picker' })
     isWindows = (await $.env.get('OS')) === 'Windows_NT'
     isPlain = options.glyphs === 'plain' || (options.glyphs !== 'emoji' && isWindows)
-    if (isPlain && options.glyphs !== 'plain') await hintOnce($)
+    if (isPlain && isAuto) await hintOnce($)
     await loadCleanView($)
     if (await read($, cleanView)) await registerChecklist($)
     await seedTurn($)
@@ -347,7 +348,7 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     // On the terminal clicks only reach a Button in fullscreen; on the main screen show the command to type
     const canClick = e.surface !== 'terminal' || e.viewport?.isFullscreen !== false
-    if (!canClick && isWindows) void hintOnce($)
+    if (!canClick && isWindows && isAuto) void hintOnce($)
 
     return (
       <Box flexDirection="column">

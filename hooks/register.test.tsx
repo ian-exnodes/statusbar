@@ -211,6 +211,26 @@ describe('icons on Windows', () => {
     expect(w.toasts.filter(t => t.includes('plain text on Windows'))).toHaveLength(1)
   })
 
+  test('no hint for someone who chose emoji, even on the main screen', { options: { glyphs: 'emoji' } }, async ($, on) => {
+    const w = fresh({ env: { OS: 'Windows_NT' } })
+    world(on, w)
+    await start($)
+    const ui = await $.ui.mount(MAIN)
+    await ui.unmount()
+    expect(w.toasts).toEqual([])
+  })
+
+  test('under auto the start and the main-screen renders raise exactly one toast between them', async ($, on) => {
+    const w = fresh({ env: { OS: 'Windows_NT' } })
+    world(on, w)
+    await start($)
+    const a = await $.ui.mount(MAIN)
+    const b = await $.ui.mount(MAIN)
+    await a.unmount()
+    await b.unmount()
+    expect(w.toasts.filter(t => t.includes('plain text on Windows'))).toHaveLength(1)
+  })
+
   test('a stored flag keeps the hint away', async ($, on) => {
     const w = fresh({ store: { windowsHint: true }, env: { OS: 'Windows_NT' } })
     world(on, w)
