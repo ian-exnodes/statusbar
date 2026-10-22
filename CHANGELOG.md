@@ -13,6 +13,13 @@ Then `/reload-plugins` in an open session, or start a new `claude`.
 
 ## 0.9.3 (2026-10-22)
 
+### Added
+
+- An Icons setting (`/plugin` → statusbar): `auto`, `emoji` or `plain`. `auto` draws the status bar as plain text
+  on Windows, where many terminal fonts show its icons as boxes (`🌿 branch` → `branch`, `↻ 12k` → `cache 12k`).
+  Once per install there, a tip suggests Windows Terminal or a Nerd Font, and `"tui": "fullscreen"` in
+  `~/.claude/settings.json` to make `⚙ Command` clickable (not over SSH).
+
 ### Fixed
 
 - `⚙ Command` could not be clicked where Claude Code does not pass clicks to plugins: its normal (non-fullscreen)
