@@ -279,13 +279,17 @@ const hintOnce = async ($: EngineInterface) => {
   void $.ui.toast(WINDOWS_HINT, { timeoutMs: 20000 })
 }
 
-const WINDOWS_HINT = 'statusbar: icons are plain text on Windows. For icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or use a Nerd Font, then set Icons to emoji in /plugin. To click ⚙ Command, add "tui": "fullscreen" to ~/.claude/settings.json (not over SSH).'
+// Claude Code puts the plugin's name before a toast, so the text starts without it
+const WINDOWS_HINT = 'icons are plain text on Windows. For icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or use a Nerd Font, then set Icons to emoji in /plugin. Over SSH, ⚙ Command is clickable only with CLAUDE_CODE_NO_FLICKER=1.'
 
 export const register: Register = (on, options) => {
   // Resolved at session start: Windows terminals often lack a font for the icons
   const isAuto = options.glyphs !== 'emoji' && options.glyphs !== 'plain'
   let isPlain = options.glyphs === 'plain'
   let isWindows = false
+  // Clicks reach ⚙ Command only in fullscreen: on Windows' main screen the band asks once to switch. Over SSH
+  // the tui setting changes nothing, so there is no offer
+  let canOffer = false
   let ticker: { cancel: () => void } | undefined
   let animator: { cancel: () => void } | undefined
 
@@ -295,6 +299,8 @@ export const register: Register = (on, options) => {
     isWindows = (await $.env.get('OS')) === 'Windows_NT'
     isPlain = options.glyphs === 'plain' || (options.glyphs !== 'emoji' && isWindows)
     if (isPlain && isAuto) await hintOnce($)
+    const isSsh = (await Promise.all([$.env.get('SSH_CONNECTION'), $.env.get('SSH_CLIENT'), $.env.get('SSH_TTY')])).some(Boolean)
+    canOffer = isWindows && !isSsh && (await $.store.get('fullscreenAsked')) !== true
     await loadCleanView($)
     if (await read($, cleanView)) await registerChecklist($)
     await seedTurn($)
@@ -396,7 +402,30 @@ export const register: Register = (on, options) => {
     ])
     const { Box, Text, Button } = $.ui.resolve(e)
     // The Clean View card sits above whatever else the band holds
-    const rest = card ? <Box flexDirection="column">{card}{below}</Box> : below
+    const stack = card ? <Box flexDirection="column">{card}{below}</Box> : below
+    // A bare digit in an empty prompt presses a band Button, so the answer needs no click
+    const answer = async (isYes: boolean) => {
+      canOffer = false
+      await $.store.set('fullscreenAsked', true)
+      void $.ui.invalidate('ui.render')
+      if (!isYes) return void $.ui.toast('type /statusbar to open the picker')
+      await $.command.run({ command: 'tui', args: 'fullscreen' })
+        .then(() => void $.ui.toast('fullscreen is on, so ⚙ Command is clickable. /tui default undoes it', { timeoutMs: 10000 }))
+        .catch(err => void $.ui.toast(`/tui fullscreen failed: ${String(err)}`))
+    }
+    const isOffered = canOffer && e.surface === 'terminal' && e.viewport?.isFullscreen === false && !e.props.hasSurvey
+    const rest = isOffered ? (
+      <Box flexDirection="column">
+        <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
+          <Text>statusbar: make {isPlain ? 'Command' : '⚙ Command'} clickable? This switches Claude Code to fullscreen (/tui default undoes it).</Text>
+          <Box>
+            <Button key="fullscreen-yes" plain hotkey="1" label="Yes" onPress={() => void answer(true)} />
+            <Box marginLeft={3}><Button key="fullscreen-no" plain hotkey="2" label="No" onPress={() => void answer(false)} /></Box>
+          </Box>
+        </Box>
+        {stack}
+      </Box>
+    ) : stack
     if (!isOpen || f === null || e.props.hasSurvey) return rest
 
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply

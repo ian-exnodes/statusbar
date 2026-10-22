@@ -321,3 +321,53 @@ describe('the model picker', () => {
     await ui.unmount()
   })
 })
+
+describe('fullscreen offer on Windows', () => {
+  const VIEW = { columns: 120, rows: 40 }
+  const MAIN_BAND = { ...BAND, viewport: { ...VIEW, isFullscreen: false } }
+  const FULL_BAND = { ...BAND, viewport: { ...VIEW, isFullscreen: true } }
+  const WIN = { OS: 'Windows_NT' }
+  const offer = async (ui: Awaited<ReturnType<Engine['ui']['mount']>>) => ui.find({ type: 'Button', key: 'fullscreen-yes' })
+
+  test('the main screen on Windows offers fullscreen; 1 runs /tui fullscreen and it is not asked again', async ($, on) => {
+    const w = fresh({ env: WIN })
+    world(on, w)
+    await start($)
+    const ui = await $.ui.mount(MAIN_BAND)
+    expect(await offer(ui)).toBeDefined()
+    await ui.press({ key: 'fullscreen-yes' })
+    expect(w.commands).toContain('tui fullscreen')
+    await ui.redraw(MAIN_BAND.props)
+    expect(await offer(ui)).toBeUndefined()
+    await ui.unmount()
+    await start($)
+    const again = await $.ui.mount(MAIN_BAND)
+    expect(await offer(again)).toBeUndefined()
+    await again.unmount()
+  })
+
+  test('2 declines: nothing runs and it is not asked again', async ($, on) => {
+    const w = fresh({ env: WIN })
+    world(on, w)
+    await start($)
+    const ui = await $.ui.mount(MAIN_BAND)
+    await ui.press({ key: 'fullscreen-no' })
+    expect(w.commands).not.toContain('tui fullscreen')
+    await ui.redraw(MAIN_BAND.props)
+    expect(await offer(ui)).toBeUndefined()
+    await ui.unmount()
+  })
+
+  const none = (name: string, over: Partial<World>, mount: typeof MAIN_BAND) =>
+    test(`no offer ${name}`, async ($, on) => {
+      world(on, fresh(over))
+      await start($)
+      const ui = await $.ui.mount(mount)
+      expect(await offer(ui)).toBeUndefined()
+      await ui.unmount()
+    })
+  none('over SSH', { env: { ...WIN, SSH_CONNECTION: '1.2.3.4 5 6.7.8.9 22' } }, MAIN_BAND)
+  none('in fullscreen', { env: WIN }, FULL_BAND)
+  none('off Windows', {}, MAIN_BAND)
+  none('once answered', { env: WIN, store: { fullscreenAsked: true } }, MAIN_BAND)
+})
