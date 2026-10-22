@@ -299,8 +299,9 @@ export const register: Register = (on, options) => {
     isWindows = (await $.env.get('OS')) === 'Windows_NT'
     isPlain = options.glyphs === 'plain' || (options.glyphs !== 'emoji' && isWindows)
     if (isPlain && isAuto) await hintOnce($)
-    const isSsh = (await Promise.all([$.env.get('SSH_CONNECTION'), $.env.get('SSH_CLIENT'), $.env.get('SSH_TTY')])).some(Boolean)
-    canOffer = isWindows && !isSsh && (await $.store.get('fullscreenAsked')) !== true
+    // A failed read means no offer, never a skipped session start
+    canOffer = isWindows && await Promise.all([$.env.get('SSH_CONNECTION'), $.env.get('SSH_CLIENT'), $.env.get('SSH_TTY'), $.store.get('fullscreenAsked')])
+      .then(([conn, client, tty, isAsked]) => !conn && !client && !tty && isAsked !== true, () => false)
     await loadCleanView($)
     if (await read($, cleanView)) await registerChecklist($)
     await seedTurn($)
@@ -403,21 +404,23 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     // The Clean View card sits above whatever else the band holds
     const stack = card ? <Box flexDirection="column">{card}{below}</Box> : below
-    // A bare digit in an empty prompt presses a band Button, so the answer needs no click
+    // A bare digit in an empty prompt presses a band Button, so the answer needs no click. A message that starts
+    // with 1 or 2 answers it too: the offer hides while Claude works, when a numbered reply is likeliest
     const answer = async (isYes: boolean) => {
       canOffer = false
-      await $.store.set('fullscreenAsked', true)
       void $.ui.invalidate('ui.render')
-      if (!isYes) return void $.ui.toast('type /statusbar to open the picker')
+      await $.store.set('fullscreenAsked', true).catch(() => undefined)
+      if (!isYes) return void $.ui.toast('type /statusbar to open the picker; /tui fullscreen makes ⚙ Command clickable later')
       await $.command.run({ command: 'tui', args: 'fullscreen' })
-        .then(() => void $.ui.toast('fullscreen is on, so ⚙ Command is clickable. /tui default undoes it', { timeoutMs: 10000 }))
-        .catch(err => void $.ui.toast(`/tui fullscreen failed: ${String(err)}`))
+        .then(() => void $.ui.toast('switched to fullscreen. /tui default undoes it', { timeoutMs: 10000 }))
+        .catch(err => void $.ui.toast(`/tui fullscreen failed (${String(err)}); type /tui fullscreen to try again`))
     }
-    const isOffered = canOffer && e.surface === 'terminal' && e.viewport?.isFullscreen === false && !e.props.hasSurvey
+    const isOffered = canOffer && e.surface === 'terminal' && e.viewport?.isFullscreen === false
+      && !e.props.hasSurvey && !e.props.isWorking
     const rest = isOffered ? (
       <Box flexDirection="column">
         <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-          <Text>statusbar: make {isPlain ? 'Command' : '⚙ Command'} clickable? This switches Claude Code to fullscreen (/tui default undoes it).</Text>
+          <Text>statusbar: make {isPlain ? 'Command' : '⚙ Command'} clickable? This switches Claude Code to fullscreen (/tui default undoes it). Type 1 or 2 in the empty prompt.</Text>
           <Box>
             <Button key="fullscreen-yes" plain hotkey="1" label="Yes" onPress={() => void answer(true)} />
             <Box marginLeft={3}><Button key="fullscreen-no" plain hotkey="2" label="No" onPress={() => void answer(false)} /></Box>
@@ -430,7 +433,7 @@ export const register: Register = (on, options) => {
 
     // Same as typing it, so Claude Code's own checks (the model-switch confirm) still apply
     const run = (command: 'model' | 'effort', args: string) =>
-      $.command.run({ command, args }).catch(err => void $.ui.toast(`statusbar: /${command} ${args} failed: ${String(err)}`))
+      $.command.run({ command, args }).catch(err => void $.ui.toast(`/${command} ${args} failed: ${String(err)}`))
     // Claude Code prints nothing for a plugin's /effort and this plugin's /effort hook is skipped, so record it here
     const pickEffort = async (level: string) => {
       const r = await run('effort', level)

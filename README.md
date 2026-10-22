@@ -141,10 +141,10 @@ Many Windows terminal fonts have no glyph for the icons, so `⚙ 📁 🌿 ↻ �
 
 For the icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or install a Nerd Font, then set Icons to `emoji`.
 
-Clicking `Command` only works in Claude Code's fullscreen layout. On Windows, the first session on the main screen
-asks once above the prompt: `1: Yes` runs `/tui fullscreen` and the button becomes clickable at once (`/tui default`
+Clicking `Command` only works in Claude Code's fullscreen layout. On Windows' main screen, a question above the
+prompt asks until answered, never while Claude works: `1: Yes` runs `/tui fullscreen` and the button becomes clickable at once (`/tui default`
 undoes it); `2: No` leaves it, and you type `/statusbar`. Over SSH to Windows the `tui` setting has no effect, so there is no
-question: set `CLAUDE_CODE_NO_FLICKER=1` to force fullscreen (Claude Code warns the screen may redraw badly), or type
+question: set `CLAUDE_CODE_NO_FLICKER=1` to force fullscreen (Claude Code keeps it off there for ConPTY re-rendering), or type
 `/statusbar`. A one-time toast on Windows covers the icons.
 
 ## When it updates

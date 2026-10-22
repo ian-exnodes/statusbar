@@ -370,4 +370,6 @@ describe('fullscreen offer on Windows', () => {
   none('in fullscreen', { env: WIN }, FULL_BAND)
   none('off Windows', {}, MAIN_BAND)
   none('once answered', { env: WIN, store: { fullscreenAsked: true } }, MAIN_BAND)
+  none('while Claude works', { env: WIN }, { ...MAIN_BAND, props: { ...MAIN_BAND.props, isWorking: true } })
+  none('while a survey holds the band', { env: WIN }, { ...MAIN_BAND, props: { ...MAIN_BAND.props, hasSurvey: true } })
 })
