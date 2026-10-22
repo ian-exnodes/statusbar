@@ -7,7 +7,7 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, GIT_STATUS, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
+import { EFFORTS, GIT_STATUS, chunks, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -131,15 +131,18 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
   // ▰ cells in the accent (red with a failed agent), ▱ cells dim; then an agent row each
   const groupRows = (g: CardGroup, key: string) => (
     <Box key={key} flexDirection="column" paddingLeft={2}>
-      <Text>
-        {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
-          ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
-        {g.label && <Text color={g.color} dimColor={!g.color}> {g.label}</Text>}
-      </Text>
+      <Box>
+        <Text>
+          {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
+            ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
+        </Text>
+        {/* A margin, not a leading space: the label's space was lost and it ran into the cells */}
+        {g.label && <Box marginLeft={1}><Text color={g.color} dimColor={!g.color}>{g.label}</Text></Box>}
+      </Box>
       {g.agents.map((a, i) => (
         <Box key={`agent${i}`}>
           <Box flexGrow={1}><Text color={a.color}>{a.mark} {a.subject}</Text></Box>
-          <Text color={a.color} dimColor={a.label === 'Done'}>  {a.label}</Text>
+          <Box marginLeft={2}><Text color={a.color} dimColor={a.label === 'Done'}>{a.label}</Text></Box>
         </Box>
       ))}
       {g.more > 0 && <Text dimColor>+{g.more} more</Text>}
@@ -169,7 +172,7 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
             <Box flexGrow={1}>
               <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.mark} {row.subject}</Text>
             </Box>
-            <Text color={row.color} bold={row.isBold} dimColor={row.isDim}>  {row.label}</Text>
+            <Box marginLeft={2}><Text color={row.color} bold={row.isBold} dimColor={row.isDim}>{row.label}</Text></Box>
           </Box>
           {row.group && groupRows(row.group, `group${i}`)}
         </Box>
@@ -353,12 +356,17 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         {rows({ ...f, isClean }, isPlain).map((row, i) => (
-          <Box key={`row${i}`}>
-            {row.map((s, j) => s.isPicker && !canClick
-              ? <Text key="picker">{isPlain ? '/statusbar' : '⚙ /statusbar'}</Text>
-              : s.isPicker
-              ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
-              : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}
+          // Whole items wrap to the next line on a narrow screen; none shrinks into a column of broken words
+          <Box key={`row${i}`} flexWrap="wrap">
+            {chunks(row).map((item, c) => (
+              <Box key={`item${c}`} flexShrink={0}>
+                {item.map((s, j) => s.isPicker && !canClick
+                  ? <Text key="picker">{isPlain ? '/statusbar' : '⚙ /statusbar'}</Text>
+                  : s.isPicker
+                  ? <Button key="picker" label={s.text} onPress={() => void togglePicker($)} />
+                  : <Text key={`seg${j}`} color={s.color}>{s.text}</Text>)}
+              </Box>
+            ))}
           </Box>
         ))}
         {hint}

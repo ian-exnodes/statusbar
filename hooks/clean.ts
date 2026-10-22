@@ -120,7 +120,7 @@ export const activityOf = (tool: string, input: object): string | undefined => {
   if (QUIET.includes(tool) || tool.startsWith('mcp__statusbar__')) return undefined
   if (['Read', 'Grep', 'Glob', 'LSP'].includes(tool)) return 'Reading files…'
   if (['Edit', 'Write', 'NotebookEdit'].includes(tool)) {
-    return typeof path === 'string' ? `Editing ${path.split('/').pop()}…` : 'Editing files…'
+    return typeof path === 'string' ? `Editing ${path.split(/[\\/]/).pop()}…` : 'Editing files…'
   }
   if (tool === 'Bash') return 'Running a command…'
   if (tool === 'Agent') return 'Starting helpers…'
