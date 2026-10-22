@@ -97,10 +97,7 @@ at once and, like `/model`, also makes it your default for new sessions. When Cl
 long conversation, where the new model reads the whole conversation again, or Fable's one-time consent), the picker
 runs `/model` instead and you answer its question; cancel and nothing changes. An effort runs `/effort`: it applies to
 the session at once and also becomes that model's default effort for new sessions, as typing `/effort` does.
-Claude Code prints nothing for it in the transcript; the status bar shows the new level.
-Clicks only reach the button in Claude Code's fullscreen layout. On the main screen (including Windows over SSH) the row shows `⚙ /statusbar`: type `/statusbar` to open the picker.
-
-It closes on `✕`, pressing `⚙ Command` again, `/statusbar`, or when you send a message. Esc does not close it: Claude Code does not pass Esc to a plugin's box above the prompt.
+Claude Code prints nothing for it in the transcript; the status bar shows the new level. Clicks only reach the button in Claude Code's fullscreen layout. On the main screen (including Windows over SSH) the row shows `⚙ /statusbar`: type `/statusbar` to open the picker. It closes on `✕`, pressing `⚙ Command` again, `/statusbar`, or when you send a message. Esc does not close it: Claude Code does not pass Esc to a plugin's box above the prompt.
 
 ### Clean View
 

@@ -327,8 +327,8 @@ export const register: Register = on => {
     if (f === null) return hint
 
     const { Box, Text, Button } = $.ui.resolve(e)
-    // Clicks only reach a Button in fullscreen; on the main screen show the command to type
-    const canClick = e.viewport?.isFullscreen !== false
+    // On the terminal clicks only reach a Button in fullscreen; on the main screen show the command to type
+    const canClick = e.surface !== 'terminal' || e.viewport?.isFullscreen !== false
 
     return (
       <Box flexDirection="column">

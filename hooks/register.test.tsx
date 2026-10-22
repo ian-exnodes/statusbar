@@ -80,7 +80,7 @@ describe('register hooks', () => {
     expect(once.context?.filter(c => c === CLEAN_VIEW_NOTE)).toHaveLength(1)
     const again = await $.prompt.submit({ text: 'and this', wait: false, origin: COMPOSER, context: [CLEAN_VIEW_NOTE] } as never)
     expect(again.context?.filter(c => c === CLEAN_VIEW_NOTE)).toHaveLength(1)
-    const other = await $.prompt.submit({ text: 'from a plugin', wait: false, origin: PLUGIN } as never)
+    const other = await $.prompt.submit({ text: 'from a plugin', wait: false, origin: PLUGIN })
     expect(other.context ?? []).not.toContain(CLEAN_VIEW_NOTE)
   })
 
@@ -90,7 +90,7 @@ describe('register hooks', () => {
     await $.command.run(STATUSBAR)
     const ui = await $.ui.mount(BAND)
     expect(await ui.find({ type: 'Text', text: 'MODEL' })).toBeDefined()
-    await $.prompt.submit({ text: 'from a plugin', wait: false, origin: PLUGIN } as never)
+    await $.prompt.submit({ text: 'from a plugin', wait: false, origin: PLUGIN })
     await ui.redraw(BAND.props)
     expect(await ui.find({ type: 'Text', text: 'MODEL' })).toBeDefined()
     await $.prompt.submit({ text: 'hello', wait: false, origin: COMPOSER })
@@ -125,16 +125,25 @@ describe('the picker button', () => {
   test('on the main screen clicks cannot reach it, so the row shows /statusbar to type', async ($, on) => {
     world(on, fresh())
     await start($)
-    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: false } } as never)
+    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: false } })
     expect(await ui.find({ type: 'Text', text: '⚙ /statusbar' })).toBeDefined()
     expect(await ui.find({ type: 'Button', text: '⚙ Command' })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('on the desktop it stays a button, fullscreen or not', async ($, on) => {
+    world(on, fresh())
+    await start($)
+    const ui = await $.ui.mount({ ...HINT, surface: 'desktop', viewport: { ...VIEW, isFullscreen: false } })
+    expect(await ui.find({ type: 'Button', text: '⚙ Command' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '⚙ /statusbar' })).toBeUndefined()
     await ui.unmount()
   })
 
   test('in fullscreen it is a button, and pressing it opens the picker', async ($, on) => {
     world(on, fresh())
     await start($)
-    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: true } } as never)
+    const ui = await $.ui.mount({ ...HINT, viewport: { ...VIEW, isFullscreen: true } })
     expect(await ui.find({ type: 'Text', text: '⚙ /statusbar' })).toBeUndefined()
     await ui.press({ key: 'picker' })
     const band = await $.ui.mount(BAND)
