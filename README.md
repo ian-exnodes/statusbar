@@ -13,7 +13,8 @@ It sits below the prompt, under Claude Code's own mode line (`▸▸ bypass perm
 
 - **Claude Code 2.1.290 or later** (check with `claude --version`). Older versions, such as 2.1.241, install the plugin and list it as enabled but show nothing, because they can't run plugin function hooks. Run `claude update`; if it stays on an older version, set the auto-update channel to **latest** in `/config` and update again.
 - `git` on your `PATH` (for the branch and change counts)
-- Tested on macOS only.
+- Tested on macOS. Windows support is new (see [Windows](#windows) for the one-key setup that makes `⚙ Command`
+  clickable) and has not yet been checked on a real Windows machine.
 
 ## Install
 
@@ -133,19 +134,73 @@ for example with bypass permissions or broad allow rules, keep Clean View off or
 
 ## Windows
 
-Many Windows terminal fonts have no glyph for the icons, so `⚙ 📁 🌿 ↻ ⏱️` show as empty boxes. The **Icons** option (`/plugin`, statusbar) picks what to draw:
+statusbar works on Windows with no setup beyond install. This is what to expect, and what to do when something looks off.
 
-- `auto` (default): plain text on Windows, icons elsewhere. Plain text reads `Command`, `main-2`, `cache 38.1k`, `2m`.
+### 1. Install or update
+
+Run the commands under [Install](#install), or [Update](#update) if you already have it, then start a new `claude`.
+
+### 2. Make `⚙ Command` clickable (one key)
+
+Claude Code passes mouse clicks to plugins only in its **fullscreen** layout. On its normal screen, statusbar shows
+`/statusbar` where the button would be, and a question appears above the prompt:
+
+```
+statusbar: make Command clickable? This switches Claude Code to fullscreen (/tui default undoes it). Type 1 or 2 in the empty prompt.
+1: Yes   2: No
+```
+
+- Type **`1`** in the empty prompt: Claude Code switches to fullscreen and `[ Command ]` becomes a button you can click.
+  Nothing to restart.
+- Type **`2`**: nothing changes; type `/statusbar` and press Enter whenever you want the picker.
+
+The question shows until you answer it, then never again. It stays away while Claude is working.
+
+Change your mind later:
+
+| To | Type |
+|---|---|
+| turn fullscreen on | `/tui fullscreen` |
+| go back to the normal screen | `/tui default` |
+| open the picker without clicking | `/statusbar` |
+
+Prefer to set it by hand? Add `"tui": "fullscreen"` to `%USERPROFILE%\.claude\settings.json` and start a new
+`claude`.
+
+**Over SSH** to a Windows machine, Claude Code keeps fullscreen off whatever `tui` says, so there is no question. To
+force it, set the variable once in PowerShell and open a new terminal (Claude Code turns it off there because the
+screen can redraw badly):
+
+```powershell
+setx CLAUDE_CODE_NO_FLICKER 1
+```
+
+Or keep typing `/statusbar`.
+
+### 3. Icons show as empty boxes
+
+Many Windows terminal fonts have no glyph for `⚙ 📁 🌿 ↻ ⏱️`. With the **Icons** option (`/plugin` → statusbar →
+Icons) on its default, `auto`, Windows gets plain text instead:
+
+```
+[Opus 5.5] high Command | c4k-website | main ~2
+Context ━──── 21% | Limit 5h ━━━╸─ 76% | ↑ 208.1k ↓ 36.8k cache 1.2M | $5.79 | 52m
+```
+
+- `auto` (default): plain text on Windows, icons elsewhere.
 - `emoji`: always the icons.
-- `plain`: never.
+- `plain`: never the icons.
 
-For the icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or install a Nerd Font, then set Icons to `emoji`.
+To get the icons, run Claude Code in [Windows Terminal](https://aka.ms/terminal) (its Cascadia font falls back to
+Segoe UI Emoji) or set your terminal's font to a [Nerd Font](https://www.nerdfonts.com/), then set Icons to `emoji`.
+Claude Code's own symbols, such as `⏵⏵` before "auto mode on", need such a font too; statusbar can't change them.
 
-Clicking `Command` only works in Claude Code's fullscreen layout. On Windows' main screen, a question above the
-prompt asks until answered, never while Claude works: `1: Yes` runs `/tui fullscreen` and the button becomes clickable at once (`/tui default`
-undoes it); `2: No` leaves it, and you type `/statusbar`. Over SSH to Windows the `tui` setting has no effect, so there is no
-question: set `CLAUDE_CODE_NO_FLICKER=1` to force fullscreen (Claude Code keeps it off there for ConPTY re-rendering), or type
-`/statusbar`. A one-time toast on Windows covers the icons.
+A one-time toast on Windows says this too.
+
+### 4. A narrow window
+
+When a row doesn't fit, whole items move to the next line (`Limit 5h ━━━╸─ 76% |` stays together). Widen the
+window to get each row back on one line.
 
 ## When it updates
 
