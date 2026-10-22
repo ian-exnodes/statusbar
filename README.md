@@ -146,15 +146,16 @@ Claude Code passes mouse clicks to plugins only in its **fullscreen** layout. On
 `/statusbar` where the button would be, and a question appears above the prompt:
 
 ```
-statusbar: make Command clickable? This switches Claude Code to fullscreen (/tui default undoes it). Type 1 or 2 in the empty prompt.
+statusbar: make Command clickable? This switches Claude Code to fullscreen (/tui default undoes it). Type 1 or 2 and press Enter.
 1: Yes   2: No
 ```
 
-- Type **`1`** in the empty prompt: Claude Code switches to fullscreen and `[ Command ]` becomes a button you can click.
+- Type **`1`** (or `yes`) and press Enter: Claude Code switches to fullscreen and `[ Command ]` becomes a button you can click.
   Nothing to restart.
-- Type **`2`**: nothing changes; type `/statusbar` and press Enter whenever you want the picker.
+- Type **`2`** (or `no`) and press Enter: nothing changes; type `/statusbar` and press Enter whenever you want the picker.
 
-The question shows until you answer it, then never again. It stays away while Claude is working.
+Your answer is not sent to Claude. The question shows until you answer it, then never again. It stays away while
+Claude is working, so a `1` you send then goes to Claude as usual.
 
 Change your mind later:
 
