@@ -279,6 +279,25 @@ const hintOnce = async ($: EngineInterface) => {
   void $.ui.toast(WINDOWS_HINT, { timeoutMs: 20000 })
 }
 
+// Clicks reach ⚙ Command only in fullscreen: on Windows' main screen the band asks once to switch. Over SSH
+// the tui setting changes nothing, so there is no offer
+let canOffer = false
+// What the band last drew, so a typed answer counts only while the question is on screen
+let isOfferShown = false
+// Typing 1 in the empty prompt presses the band's Button where Claude Code supports it; elsewhere (seen on
+// Windows) the digit lands in the prompt, so 1, 2, yes or no sent as a prompt answer too. A message that is
+// just one of those words answers it as well: the question hides while Claude works, when such a reply is likeliest
+const answer = async ($: EngineInterface, isYes: boolean) => {
+  canOffer = false
+  isOfferShown = false
+  void $.ui.invalidate('ui.render')
+  await $.store.set('fullscreenAsked', true).catch(() => undefined)
+  if (!isYes) return void $.ui.toast('type /statusbar to open the picker; /tui fullscreen makes ⚙ Command clickable later')
+  await $.command.run({ command: 'tui', args: 'fullscreen' })
+    .then(() => void $.ui.toast('switched to fullscreen. /tui default undoes it', { timeoutMs: 10000 }))
+    .catch(err => void $.ui.toast(`/tui fullscreen failed (${String(err)}); type /tui fullscreen to try again`))
+}
+
 // Claude Code puts the plugin's name before a toast, so the text starts without it
 const WINDOWS_HINT = 'icons are plain text on Windows. For icons, run Claude Code in Windows Terminal (Cascadia + Segoe UI Emoji) or use a Nerd Font, then set Icons to emoji in /plugin. Over SSH, ⚙ Command is clickable only with CLAUDE_CODE_NO_FLICKER=1.'
 
@@ -287,9 +306,6 @@ export const register: Register = (on, options) => {
   const isAuto = options.glyphs !== 'emoji' && options.glyphs !== 'plain'
   let isPlain = options.glyphs === 'plain'
   let isWindows = false
-  // Clicks reach ⚙ Command only in fullscreen: on Windows' main screen the band asks once to switch. Over SSH
-  // the tui setting changes nothing, so there is no offer
-  let canOffer = false
   let ticker: { cancel: () => void } | undefined
   let animator: { cancel: () => void } | undefined
 
@@ -384,6 +400,11 @@ export const register: Register = (on, options) => {
   // The person sending a message closes it; another plugin's prompt does not
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind === 'plugin') return next(e)
+    const reply = isOfferShown ? /^(?:(1|y|yes)|(2|n|no))$/i.exec(e.text.trim()) : null
+    if (reply) {
+      void answer($, reply[1] !== undefined)
+      return { drop: reply[1] !== undefined ? 'statusbar: switching to fullscreen' : 'statusbar: keeping the normal screen' }
+    }
     await closePicker($)
     if (startsCard(e)) await update($, nextCard, () => e.text)
     // Clean View's planning note rides with the person's prompt as context they never see:
@@ -404,26 +425,16 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     // The Clean View card sits above whatever else the band holds
     const stack = card ? <Box flexDirection="column">{card}{below}</Box> : below
-    // A bare digit in an empty prompt presses a band Button, so the answer needs no click. A message that starts
-    // with 1 or 2 answers it too: the offer hides while Claude works, when a numbered reply is likeliest
-    const answer = async (isYes: boolean) => {
-      canOffer = false
-      void $.ui.invalidate('ui.render')
-      await $.store.set('fullscreenAsked', true).catch(() => undefined)
-      if (!isYes) return void $.ui.toast('type /statusbar to open the picker; /tui fullscreen makes ⚙ Command clickable later')
-      await $.command.run({ command: 'tui', args: 'fullscreen' })
-        .then(() => void $.ui.toast('switched to fullscreen. /tui default undoes it', { timeoutMs: 10000 }))
-        .catch(err => void $.ui.toast(`/tui fullscreen failed (${String(err)}); type /tui fullscreen to try again`))
-    }
     const isOffered = canOffer && e.surface === 'terminal' && e.viewport?.isFullscreen === false
       && !e.props.hasSurvey && !e.props.isWorking
+    isOfferShown = isOffered
     const rest = isOffered ? (
       <Box flexDirection="column">
         <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-          <Text>statusbar: make {isPlain ? 'Command' : '⚙ Command'} clickable? This switches Claude Code to fullscreen (/tui default undoes it). Type 1 or 2 in the empty prompt.</Text>
+          <Text>statusbar: make {isPlain ? 'Command' : '⚙ Command'} clickable? This switches Claude Code to fullscreen (/tui default undoes it). Type 1 or 2 and press Enter.</Text>
           <Box>
-            <Button key="fullscreen-yes" plain hotkey="1" label="Yes" onPress={() => void answer(true)} />
-            <Box marginLeft={3}><Button key="fullscreen-no" plain hotkey="2" label="No" onPress={() => void answer(false)} /></Box>
+            <Button key="fullscreen-yes" plain hotkey="1" label="Yes" onPress={() => void answer($, true)} />
+            <Box marginLeft={3}><Button key="fullscreen-no" plain hotkey="2" label="No" onPress={() => void answer($, false)} /></Box>
           </Box>
         </Box>
         {stack}
