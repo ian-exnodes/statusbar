@@ -73,12 +73,42 @@ describe('statusbar rows', () => {
       { kind: 'five_hour', percentUsed: 23.5 },
       { kind: 'seven_day', percentUsed: 8 },
       { kind: 'spend_limit', percentUsed: 50 },
-    ])).toEqual([{ label: '5h', remaining: 76 }, { label: '7d', remaining: 92 }])
-    expect(quotas([{ kind: 'five_hour', percentUsed: 104 }])).toEqual([{ label: '5h', remaining: 0 }])
+    ], 0)).toEqual([{ label: '5h', remaining: 76 }, { label: '7d', remaining: 92 }])
+    expect(quotas([{ kind: 'five_hour', percentUsed: 104 }, { kind: 'seven_day', percentUsed: 8 }], 0))
+      .toEqual([{ label: '5h', remaining: 0 }, { label: '7d', remaining: 92 }])
+    // The 5h window reset while idle: the engine reports only 7d until the next reply
+    expect(quotas([{ kind: 'seven_day', percentUsed: 16 }], 0)).toEqual([{ label: '5h', remaining: 100 }, { label: '7d', remaining: 84 }])
+    // Off a subscription, or a gateway's spend limit only: no Limit items
+    expect(quotas([], 0)).toEqual([])
+    expect(quotas([{ kind: 'spend_limit', percentUsed: 50 }], 0)).toEqual([])
 
     const [, bottom = []] = rows({ ...base, quotas: [{ label: '5h', remaining: 76 }, { label: '7d', remaining: 8 }] })
     expect(plain(bottom)).toBe('Context ━╸─── 37% | Limit 5h ━━━╸─ 76% | Limit 7d ───── 8% | ↑ 45.2k ↓ 1.2k ↻ 38.1k | $1.23 | ⏱️ 2m')
     expect(colorOf(bottom, '━━━╸')).toBe('green')
+  })
+
+  test('each limit shows when it resets: a countdown within a day, else the weekday', async () => {
+    const now = Date.parse('2026-10-27T07:30:00Z')
+    const limits = [
+      { kind: 'five_hour', percentUsed: 100, resetsAt: '2026-10-27T09:10:00Z' },
+      // Noon UTC: the same Friday in any time zone from UTC-11 to UTC+11
+      { kind: 'seven_day', percentUsed: 8, resetsAt: '2026-10-30T12:00:00Z' },
+    ]
+    const q = quotas(limits, now)
+    expect(q).toEqual([{ label: '5h', remaining: 0, resets: '1h 40m' }, { label: '7d', remaining: 92, resets: 'Fri' }])
+    // Seconds left round up, so a window never reads 0m before it resets
+    expect(quotas([{ ...limits[0]!, resetsAt: '2026-10-27T07:30:30Z' }, limits[1]!], now)[0]!.resets).toBe('1m')
+    // Past its reset the window is fresh again, until the next reply brings its new reading
+    expect(quotas([{ ...limits[0]!, resetsAt: '2026-10-27T07:00:00Z' }, limits[1]!], now)[0]).toEqual({ label: '5h', remaining: 100 })
+    // No reset time from the engine: no ↺
+    expect(quotas([{ kind: 'seven_day', percentUsed: 8 }], now)[1]).toEqual({ label: '7d', remaining: 92 })
+
+    const [, bottom = []] = rows({ ...base, quotas: q })
+    expect(plain(bottom)).toContain('| Limit 5h ───── 0% ↺1h 40m | Limit 7d ━━━━╸ 92% ↺Fri | ')
+    expect(colorOf(bottom, '↺1h')).toBe('red')
+    expect(colorOf(bottom, '↺Fri')).toBe('subtle')
+    expect(chunks(bottom).map(plain)[1]).toBe('Limit 5h ───── 0% ↺1h 40m | ')
+    expect(plain(rows({ ...base, quotas: q }, true)[1]!)).toContain('92% resets Fri | ')
   })
 
   test('bars are 5 thin cells, a half cell per 10%, the filled part in the status color', async () => {

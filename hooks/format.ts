@@ -111,11 +111,22 @@ const duration = (ms: number) => {
 
 const LABELS: Record<string, string> = { five_hour: '5h', seven_day: '7d' }
 
-export const quotas = (limits: readonly { kind: string; percentUsed: number }[]): StatusQuota[] =>
-  limits.flatMap(l => {
-    const label = LABELS[l.kind]
-    return label ? [{ label, remaining: Math.max(0, Math.floor(100 - l.percentUsed)) }] : []
+// Within a day a countdown, like the session timer; further out the weekday, in the person's time zone
+const resetsIn = (at: number, now: number) =>
+  at - now < 86_400_000 ? duration(at - now + 59_999) : new Date(at).toLocaleDateString('en-US', { weekday: 'short' })
+
+// The engine stops reporting a window once it resets, until the next reply: on a subscription (either window
+// present) a missing or already-reset one is a fresh window, 100% left, not a reason to hide it
+// ponytail: a window the engine drops mid-life would also read 100%; keep the last reading if that ever happens
+export const quotas = (limits: readonly { kind: string; percentUsed: number; resetsAt?: string }[], now: number): StatusQuota[] => {
+  if (!limits.some(l => LABELS[l.kind])) return []
+  return Object.entries(LABELS).map(([kind, label]) => {
+    const l = limits.find(l => l.kind === kind)
+    const at = Date.parse(l?.resetsAt ?? '')
+    if (!l || at <= now) return { label, remaining: 100 }
+    return { label, remaining: Math.max(0, Math.floor(100 - l.percentUsed)), ...(Number.isFinite(at) ? { resets: resetsIn(at, now) } : {}) }
   })
+}
 
 // --no-optional-locks: a plain status refreshes .git/index and can leave the person's own git add facing index.lock
 export const GIT_STATUS = ['git', '--no-optional-locks', 'status', '--porcelain=v2', '--branch'] as const
@@ -169,7 +180,10 @@ export const rows = (f: StatusFigures, isPlain = false): Segment[][] => {
       ...f.quotas.flatMap(q => [
         { text: `Limit ${q.label} ` },
         ...meter(q.remaining, quotaColor(q.remaining)),
-        { text: ` ${q.remaining}% | ` },
+        { text: ` ${q.remaining}%` },
+        // Red once the window is used up: then when it resets is what matters
+        ...(q.resets ? [{ text: ` ${isPlain ? 'resets ' : '↺'}${q.resets}`, color: q.remaining <= 0 ? 'red' : 'subtle' }] : []),
+        { text: ' | ' },
       ]),
       { text: `↑ ${tokens(f.tokensIn)}`, color: 'cyan' },
       { text: ' ' },

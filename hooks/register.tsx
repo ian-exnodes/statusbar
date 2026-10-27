@@ -209,7 +209,7 @@ async function refresh($: EngineInterface) {
       usd: usage.cost?.usd ?? 0,
       ms: now - usage.startedAt,
       turnDelta: delta ?? undefined,
-      quotas: quotas(usage.rateLimits),
+      quotas: quotas(usage.rateLimits, now),
       models: pickerModels(settings as Parameters<typeof pickerModels>[0], model),
     }
   })
@@ -249,7 +249,7 @@ async function tick($: EngineInterface) {
     tokensIn: usage.context.tokens ?? 0,
     usd: usage.cost?.usd ?? 0,
     ms: now - usage.startedAt,
-    quotas: quotas(usage.rateLimits),
+    quotas: quotas(usage.rateLimits, now),
   }
   const isTiming = isOn && c !== null && c.endedAt === undefined
   if (shown !== null && (isTiming || !sameRows(shown, { ...shown, ...live }))) {
