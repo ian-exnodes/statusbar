@@ -1,5 +1,5 @@
-/** A usage-limit window and how much of it is left, 0 to 100. */
-export type StatusQuota = { label: string; remaining: number }
+/** A usage-limit window, how much of it is left (0 to 100), and when it resets: `1h 40m` within a day, else `Thu`. */
+export type StatusQuota = { label: string; remaining: number; resets?: string }
 
 /** A reasoning effort level, as /effort takes it. */
 export type StatusEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'

@@ -11,6 +11,19 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.6 (2026-10-27)
+
+### Added
+
+- Each limit shows when it resets: `Limit 5h ━━━╸─ 76% ↺1h 40m | Limit 7d ━━━━╸ 92% ↺Fri`. Within a day it counts
+  down each minute; further out it names the weekday, in your time zone. The reset time turns red once the limit is
+  used up. With plain icons it reads `resets 1h 40m`.
+
+### Fixed
+
+- `Limit 5h` disappeared when the 5-hour window reset while the session was idle: Claude Code stops reporting a
+  window once it resets, until the next reply. The bar now shows that window as a fresh 100% instead of hiding it.
+
 ## 0.9.5 (2026-10-22)
 
 ### Fixed

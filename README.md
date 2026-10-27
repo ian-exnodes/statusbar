@@ -4,7 +4,7 @@ A Claude Code plugin (a "mod") that draws a colored, live status line under the 
 
 ```
 [Opus 5.5] high [ ⚙ Command ] | 📁 main-2 | 🌿 main +1~2
-Context ━──── 21% | Limit 5h ━━━╸─ 76% | Limit 7d ━━━━╸ 92% | ↑ 208.1k ↓ 36.8k ↻ 1.2M | $5.79 | ⏱️ 52m | ▲ +21.4k last turn
+Context ━──── 21% | Limit 5h ━━━╸─ 76% ↺1h 40m | Limit 7d ━━━━╸ 92% ↺Thu | ↑ 208.1k ↓ 36.8k ↻ 1.2M | $5.79 | ⏱️ 52m | ▲ +21.4k last turn
 ```
 
 It sits below the prompt, under Claude Code's own mode line (`▸▸ bypass permissions on …`).
@@ -72,8 +72,8 @@ claude plugin marketplace remove ian-exnodes
 | Shown | Meaning |
 |---|---|
 | `Context ━──── 21%` | **Context window fill.** Each thin cell is 20% and a half cell (`╸`) 10%, rounded down; the % is exact. Only the filled part is colored. It goes **up** as the conversation grows. Green below 70%, yellow from 70%, red from 90%. Near full, Claude Code compacts the conversation. |
-| `Limit 5h ━━━╸─ 76%` | **5-hour usage limit left.** It goes **down** as you work. Green above 30%, yellow at 30% or less, red at 10% or less (the opposite of the context bar). |
-| `Limit 7d ━━━━╸ 92%` | **Weekly (7-day) usage limit left.** Same bar and colors as the 5h one. |
+| `Limit 5h ━━━╸─ 76% ↺1h 40m` | **5-hour usage limit left, and when it resets.** It goes **down** as you work. Green above 30%, yellow at 30% or less, red at 10% or less (the opposite of the context bar). `↺` counts down to the reset (gray, or red once the limit is used up). |
+| `Limit 7d ━━━━╸ 92% ↺Thu` | **Weekly (7-day) usage limit left.** Same bar and colors as the 5h one. `↺` names the day it resets, in your time zone, or counts down once it is less than a day away. |
 | `↑ 208.1k` (cyan) | Input tokens the latest model response read: the whole conversation, system prompt and tools. This is what fills the context bar. |
 | `↓ 36.8k` (yellow) | Output tokens the model has written, summed over every turn since the plugin loaded in this session. |
 | `↻ 1.2M` (green) | Input tokens read from the prompt cache, summed over every turn since the plugin loaded in this session. |
@@ -81,7 +81,7 @@ claude plugin marketplace remove ian-exnodes
 | `⏱️ 52m` | Time since the session started, in minutes, then hours and minutes (`3h 19m`) (a resumed session counts from its first launch). |
 | `▲ +21.4k last turn` (gray) | How much the context grew during the last turn: context size now minus after the turn before. `▼ -N` means it shrank, for example after a compaction. The first turn of a new session counts from an empty context. |
 
-The 5h and 7d bars appear only on a Claude subscription, once Claude Code has received its first limit reading. Other sessions (API key, gateways) show the line without them.
+The 5h and 7d bars appear only on a Claude subscription, once Claude Code has received its first limit reading. Other sessions (API key, gateways) show the line without them. When a window resets while the session is idle, Claude Code stops reporting it until the next reply; the bar then shows that window as a fresh 100%, without a `↺`.
 
 ### Picker
 
@@ -185,7 +185,7 @@ Icons) on its default, `auto`, Windows gets plain text instead:
 
 ```
 [Opus 5.5] high Command | c4k-website | main ~2
-Context ━──── 21% | Limit 5h ━━━╸─ 76% | ↑ 208.1k ↓ 36.8k cache 1.2M | $5.79 | 52m
+Context ━──── 21% | Limit 5h ━━━╸─ 76% resets 1h 40m | ↑ 208.1k ↓ 36.8k cache 1.2M | $5.79 | 52m
 ```
 
 - `auto` (default): plain text on Windows, icons elsewhere.
