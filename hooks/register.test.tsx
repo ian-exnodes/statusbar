@@ -52,6 +52,8 @@ function world(on: On, w: World): MockClock {
   on('ui.toast', (_$, e) => { w.toasts.push(e.text); return { value: undefined } })
   // The engine's own drawing beneath the plugin: an answer's text, nothing for the rest
   on('ui.render', { component: 'AssistantMessage' }, ($, e) => { const { Text } = $.ui.resolve(e); return <Text>{e.props.text}</Text> })
+  on('ui.render', { component: 'Spinner' }, ($, e) => { const { Text } = $.ui.resolve(e); return <Text>{e.props.message ?? e.props.word}</Text> })
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('ui.render', ($, e) => { const { Box } = $.ui.resolve(e); return <Box /> })
   on('state.set', (_$, e, next) => { if (e.key === 'figures') w.figureWrites++; return next(e) })
   on('process.run', (_$, e) => {
@@ -410,4 +412,53 @@ describe('fullscreen offer on Windows', () => {
   none('once answered', { env: WIN, store: { fullscreenAsked: true } }, MAIN_BAND)
   none('while Claude works', { env: WIN }, { ...MAIN_BAND, props: { ...MAIN_BAND.props, isWorking: true } })
   none('while a survey holds the band', { env: WIN }, { ...MAIN_BAND, props: { ...MAIN_BAND.props, hasSurvey: true } })
+})
+
+describe('the spinner line under Clean View', () => {
+  const SPINNER = { plugin: 'statusbar', surface: 'terminal', component: 'Spinner', props: { word: 'Razzmatazzing', message: null, suffix: '…', mode: 'thinking' } } as const
+  const shown = async ($: Engine, mount: typeof SPINNER | { props: unknown } = SPINNER) => {
+    const ui = await $.ui.mount({ ...SPINNER, ...mount } as typeof SPINNER)
+    const found = await ui.find({ type: 'Text' })
+    await ui.unmount()
+    return found !== undefined
+  }
+  const request = async ($: Engine) => {
+    await $.prompt.submit({ text: 'fix the bug', wait: false, origin: COMPOSER })
+    await $.turn.start({ text: 'fix the bug', turnId: 't1' })
+  }
+
+  test('hides while the card is open: the card already says Claude is working', async ($, on) => {
+    world(on, fresh({ isClean: true }))
+    await start($)
+    await request($)
+    expect(await shown($)).toBe(false)
+  })
+
+  test('shows a state message that replaces the word, such as compacting', async ($, on) => {
+    world(on, fresh({ isClean: true }))
+    await start($)
+    await request($)
+    expect(await shown($, { props: { ...SPINNER.props, message: 'Compacting conversation' } })).toBe(true)
+  })
+
+  test('shows with no card open, so something still says Claude is busy', async ($, on) => {
+    world(on, fresh({ isClean: true }))
+    await start($)
+    expect(await shown($)).toBe(true)
+  })
+
+  test('shows again once the card has closed', async ($, on) => {
+    world(on, fresh({ isClean: true }))
+    await start($)
+    await request($)
+    await $.turn.complete({ answer: 'Done.', durationMs: 1_000, isAborted: false, turnId: 't1', reason: 'answer' })
+    expect(await shown($)).toBe(true)
+  })
+
+  test('shows with Clean View off', async ($, on) => {
+    world(on, fresh())
+    await start($)
+    await request($)
+    expect(await shown($)).toBe(true)
+  })
 })

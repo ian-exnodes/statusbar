@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.7 (2026-11-04)
+
+### Changed
+
+- Clean View hides Claude Code's working line (`· Razzmatazzing… (51s · ↓ 2.3k tokens)`) while the checklist card is
+  open: the card's spinning mark, timer and activity line already say Claude is working. The line still shows when it
+  carries a state message (such as compacting), when no card is open, and after `[ Details ]`.
+
 ## 0.9.6 (2026-10-27)
 
 ### Added

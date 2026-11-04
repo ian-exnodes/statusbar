@@ -578,6 +578,13 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
   on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
   on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => (await hidesRows($)) ? empty($, e) : next(e))
+  // The open card already says Claude is working (its spinner, timer and activity line). A state message
+  // (compacting, waiting) still shows, and so does the line when no card is open
+  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
+    if (e.props.message !== null || !(await hidesRows($))) return next(e)
+    const c = await read($, checklist)
+    return c !== null && c.endedAt === undefined ? empty($, e) : next(e)
+  })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     const [isOn, list, isRevealed, trailList] = await Promise.all([read($, cleanView), read($, finals), read($, showNotes), read($, trails)])
