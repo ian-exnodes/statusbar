@@ -120,6 +120,8 @@ While it is on, Claude is asked to break each request into a few tasks first, so
 finishes, the card reads `✓ 4 of 4 done · 3m · 2 files changed` until your next request, and a dim line above the
 answer keeps the same summary in the transcript. The working task's mark spins and a bar slides under it with what
 Claude is doing (`Reading files…`, `Running a command…`, `Editing register.tsx…`), so you can see it is still busy.
+While the card is open, Claude Code's own working line (`· Razzmatazzing… (51s · ↓ 2.3k tokens)`) is hidden, since
+the card already says the same; it still shows when it carries a state such as compacting, and when no card is open.
 `[ Details ]` shows the hidden rows for a look inside, and `[ Hide details ]` hides them again. When Claude starts helper agents, they join the task in progress:
 its bar becomes a real count of the agents that finished (`▰▰▰▰▱▱▱▱▱▱▱▱ 1 of 3 · 33%`), with a row for each agent
 (`✓ Done`, `⠹ Running`, `✗ Failed` in red; past 5, `+3 more`). A task without agents never shows a %, because
