@@ -87,13 +87,12 @@ export const reopened = (c: CleanChecklist): CleanChecklist => {
   return open
 }
 
-// A block bouncing across the bar: motion that says "alive" without claiming a %
-export const shimmer = (frame: number, block = 3) => {
-  const span = TASK_CELLS - block
-  const at = frame % (span * 2)
-  const pos = at <= span ? at : span * 2 - at
-  return Array.from({ length: TASK_CELLS }, (_, i) => i >= pos && i < pos + block ? '▰' : '▱').join('')
-}
+// A face that changes every 3 seconds: motion that says "alive" without claiming a %.
+// Plain ASCII, which every terminal font has, so it never draws wider than its cells
+export const FACES = ['\\(^o^)/', '(^_^)', '(o_O)', '(>_<)', '(-_-) zzz', '(^-^)b', '(*_*)', '(=^.^=)']
+const FACE_WIDTH = Math.max(...FACES.map(f => f.length))
+// Steps of 3 through 8 faces visit each once in a shuffled-looking order
+export const face = (ms: number) => FACES[(Math.floor(ms / 3000) * 3) % FACES.length]!.padEnd(FACE_WIDTH)
 
 const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<string, string>>, accent: string, spin: string): CardGroup => {
   const statuses = agents.map(a => statusById[a.id])
@@ -199,7 +198,7 @@ export const card = (
     const isWorking = t.status === 'in_progress'
     const showsAgents = own.length > 0 && (isWorking || own.some(a => isRunning(statusById[a.id])))
     const taskGroup = showsAgents ? { group: agentGroup(own, statusById, accent, spin) }
-      : isWorking ? { group: { cells: shimmer(frame), ...(c.activity ? { label: c.activity } : {}), agents: [], more: 0 } } : {}
+      : isWorking ? { group: { cells: face(now - c.startedAt), ...(c.activity ? { label: c.activity } : {}), agents: [], more: 0 } } : {}
     return t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green', ...taskGroup }
       : isWorking ? { mark: spin, subject: t.subject, label: 'Working', color: accent, isBold: true, ...taskGroup }
         : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true }

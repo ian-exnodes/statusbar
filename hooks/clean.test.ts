@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   CLEAN_VIEW_NOTE, addFinal, card, checklistReply, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
-  agentSpawned, agentStatuses, reopened, shimmer, SPINNER, TASK_CELLS,
+  agentSpawned, agentStatuses, reopened, face, FACES, SPINNER,
   activityOf, activitySet, fileChanged, trailLine, trailFor,
 } from './clean'
 
@@ -162,19 +162,22 @@ describe('clean view', () => {
     expect(finalsFromMessages(history)).toEqual(['Both files have 3 lines.', 'Sorted.'])
   })
 
-  test('the working task animates: its mark spins and a bar slides back and forth', async () => {
+  test('the working task animates: its mark spins and a face changes every 3 seconds', async () => {
     const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
     expect(card(working, 0, 'blue', {}, 3).rows[1]?.mark).toBe(SPINNER[3])
     expect(card(working, 0, 'blue', {}, SPINNER.length).rows[1]?.mark).toBe(SPINNER[0])
-    expect(shimmer(0)).toBe('▰▰▰▱▱▱▱▱▱▱▱▱')
-    expect(shimmer(2)).toBe('▱▱▰▰▰▱▱▱▱▱▱▱')
-    expect(shimmer(9)).toBe('▱▱▱▱▱▱▱▱▱▰▰▰')
-    expect(shimmer(10)).toBe('▱▱▱▱▱▱▱▱▰▰▰▱')
-    expect(shimmer(18)).toBe(shimmer(0))
-    expect(shimmer(5).length).toBe(TASK_CELLS)
+    // Plain ASCII only: every terminal font has it, so no cell is drawn wider than the rest
+    expect(FACES.every(f => /^[\x20-\x7e]+$/.test(f))).toBe(true)
+    expect(face(0)).toBe(face(2999))
+    expect(face(3000)).not.toBe(face(0))
+    // Each face once before any repeats
+    expect(new Set(FACES.map((_, i) => face(i * 3000))).size).toBe(FACES.length)
+    expect(face(FACES.length * 3000)).toBe(face(0))
+    // Padded to one width so the label beside it stays put
+    expect(new Set(FACES.map((_, i) => face(i * 3000).length)).size).toBe(1)
     // No agents under it: motion only, never a made-up %
-    const group = card(working, 0, 'blue', {}, 2).rows[1]?.group
-    expect(group).toEqual({ cells: shimmer(2), agents: [], more: 0 })
+    const group = card(working, 3000, 'blue', {}, 2).rows[1]?.group
+    expect(group).toEqual({ cells: face(3000 - working.startedAt), agents: [], more: 0 })
     expect(card(working, 0, 'blue').rows[0]?.group).toBeUndefined()
   })
 
