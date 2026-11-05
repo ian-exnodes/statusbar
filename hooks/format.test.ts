@@ -104,10 +104,10 @@ describe('statusbar rows', () => {
     expect(quotas([{ kind: 'seven_day', percentUsed: 8 }], now)[1]).toEqual({ label: '7d', remaining: 92 })
 
     const [, bottom = []] = rows({ ...base, quotas: q })
-    expect(plain(bottom)).toContain('| Limit 5h ───── 0% ↺1h 40m | Limit 7d ━━━━╸ 92% ↺Fri | ')
-    expect(colorOf(bottom, '↺1h')).toBe('red')
-    expect(colorOf(bottom, '↺Fri')).toBe('subtle')
-    expect(chunks(bottom).map(plain)[1]).toBe('Limit 5h ───── 0% ↺1h 40m | ')
+    expect(plain(bottom)).toContain('| Limit 5h ───── 0% ↺ 1h 40m | Limit 7d ━━━━╸ 92% ↺ Fri | ')
+    expect(colorOf(bottom, '↺ 1h')).toBe('red')
+    expect(colorOf(bottom, '↺ Fri')).toBe('subtle')
+    expect(chunks(bottom).map(plain)[1]).toBe('Limit 5h ───── 0% ↺ 1h 40m | ')
     expect(plain(rows({ ...base, quotas: q }, true)[1]!)).toContain('92% resets Fri | ')
   })
 

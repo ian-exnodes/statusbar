@@ -182,7 +182,7 @@ export const rows = (f: StatusFigures, isPlain = false): Segment[][] => {
         ...meter(q.remaining, quotaColor(q.remaining)),
         { text: ` ${q.remaining}%` },
         // Red once the window is used up: then when it resets is what matters
-        ...(q.resets ? [{ text: ` ${isPlain ? 'resets ' : '↺'}${q.resets}`, color: q.remaining <= 0 ? 'red' : 'subtle' }] : []),
+        ...(q.resets ? [{ text: ` ${isPlain ? 'resets ' : '↺ '}${q.resets}`, color: q.remaining <= 0 ? 'red' : 'subtle' }] : []),
         { text: ' | ' },
       ]),
       { text: `↑ ${tokens(f.tokensIn)}`, color: 'cyan' },

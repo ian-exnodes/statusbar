@@ -11,6 +11,12 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.8 (2026-11-05)
+
+### Changed
+
+- A space after the reset mark, so it no longer runs into the time: `↺ 3h 45m`, `↺ Fri`.
+
 ## 0.9.7 (2026-11-04)
 
 ### Changed
