@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.11 (2026-11-05)
+
+### Changed
+
+- Clean View's working task shows a face that changes every 3 seconds, `\(^o^)/`, `(o_O)`, `(-_-) zzz` and five more,
+  instead of the sliding `▱▱▰▰▰▱▱` bar: plain ASCII, which every terminal font draws one cell each, so it no longer
+  looks uneven or runs into `Running a command…`. A task with helper agents keeps its `▰▱` count bar.
+
 ## 0.9.10 (2026-11-05)
 
 ### Changed

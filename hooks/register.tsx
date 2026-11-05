@@ -128,13 +128,13 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
   const accent = modelColor(f?.model ?? '')
   const k = card(c, await $.clock.now(), accent, statusById, await read($, frame))
 
-  // ▰ cells in the accent (red with a failed agent), ▱ cells dim; then an agent row each
+  // ▰ cells (or the working task's face) in the accent (red with a failed agent), ▱ cells dim; then an agent row each
   const groupRows = (g: CardGroup, key: string) => (
     <Box key={key} flexDirection="column" paddingLeft={2}>
       <Box>
         <Text>
-          {g.cells.match(/▰+|▱+/g)?.map((run, i) => run[0] === '▰'
-            ? <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text> : <Text key={`run${i}`} dimColor>{run}</Text>)}
+          {g.cells.match(/▱+|[^▱]+/g)?.map((run, i) => run[0] === '▱'
+            ? <Text key={`run${i}`} dimColor>{run}</Text> : <Text key={`run${i}`} color={g.color ?? accent}>{run}</Text>)}
         </Text>
         {/* A margin, not a leading space: the label's space was lost and it ran into the cells */}
         {g.label && <Box marginLeft={1}><Text color={g.color} dimColor={!g.color}>{g.label}</Text></Box>}
