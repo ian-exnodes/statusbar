@@ -111,7 +111,7 @@ request, a checklist card above the prompt, and Claude's final answer:
     │ Step 2 of 4   ▓▓▓▓▓░░░░░░░░░░░░░░░               │
     │ ✓ Pick the page style and layout          Done   │
     │ ◐ Check how the page gets live weather Working   │
-    │   ▱▱▰▰▰▱▱▱▱▱▱▱ Looking things up…                │
+    │   ──━━━─────── Looking things up…                │
     │ ○ Build the weather dashboard             Next   │
     │ ○ Publish it and share the link        Up next   │
     ╰──────────────────────────────────────────────────╯
@@ -123,7 +123,7 @@ Claude is doing (`Reading files…`, `Running a command…`, `Editing register.t
 While the card is open, Claude Code's own working line (`· Razzmatazzing… (51s · ↓ 2.3k tokens)`) is hidden, since
 the card already says the same; it still shows when it carries a state such as compacting, and when no card is open.
 `[ Details ]` shows the hidden rows for a look inside, and `[ Hide details ]` hides them again. When Claude starts helper agents, they join the task in progress:
-its bar becomes a real count of the agents that finished (`▰▰▰▰▱▱▱▱▱▱▱▱ 1 of 3 · 33%`), with a row for each agent
+its bar becomes a real count of the agents that finished (`━━━━──────── 1 of 3 · 33%`), with a row for each agent
 (`✓ Done`, `⠹ Running`, `✗ Failed` in red; past 5, `+3 more`). A task without agents never shows a %, because
 nothing reports how far along it is. If any agents are still running when Claude
 answers, the card says so, and it re-opens when they report back and Claude carries on. Permission prompts, Claude's questions to you,
