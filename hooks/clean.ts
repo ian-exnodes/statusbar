@@ -94,6 +94,10 @@ const FACE_WIDTH = Math.max(...FACES.map(f => f.length))
 // Steps of 3 through 8 faces visit each once in a shuffled-looking order
 export const face = (ms: number) => FACES[(Math.floor(ms / 3000) * 3) % FACES.length]!.padEnd(FACE_WIDTH)
 
+// The label's closing … counts up . .. ... and starts over every half second, padded so nothing after it moves
+export const dots = (label: string, ms: number) =>
+  label.endsWith('…') ? label.slice(0, -1) + '.'.repeat(1 + (Math.floor(ms / 500) % 3)).padEnd(3) : label
+
 const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<string, string>>, accent: string, spin: string): CardGroup => {
   const statuses = agents.map(a => statusById[a.id])
   const finished = statuses.filter(s => !isRunning(s)).length
@@ -198,7 +202,7 @@ export const card = (
     const isWorking = t.status === 'in_progress'
     const showsAgents = own.length > 0 && (isWorking || own.some(a => isRunning(statusById[a.id])))
     const taskGroup = showsAgents ? { group: agentGroup(own, statusById, accent, spin) }
-      : isWorking ? { group: { cells: face(now - c.startedAt), ...(c.activity ? { label: c.activity } : {}), agents: [], more: 0 } } : {}
+      : isWorking ? { group: { cells: face(now - c.startedAt), ...(c.activity ? { label: dots(c.activity, now - c.startedAt) } : {}), agents: [], more: 0 } } : {}
     return t.status === 'completed' ? { mark: '✓', subject: t.subject, label: 'Done', color: 'green', ...taskGroup }
       : isWorking ? { mark: spin, subject: t.subject, label: 'Working', color: accent, isBold: true, ...taskGroup }
         : { mark: '○', subject: t.subject, label: i === next ? 'Next' : 'Up next', isDim: true }

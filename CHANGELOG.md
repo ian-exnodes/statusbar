@@ -11,6 +11,13 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.12 (2026-11-05)
+
+### Changed
+
+- The working task's label ends in dots that count up, `Running a command.` `..` `...`, and start over every half
+  second. They take three cells either way, so nothing after them moves.
+
 ## 0.9.11 (2026-11-05)
 
 ### Changed

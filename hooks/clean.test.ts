@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   CLEAN_VIEW_NOTE, addFinal, card, checklistReply, elapsed, isFinalAnswer, shortTitle, startChecklist, taskCreated, taskUpdated, todosWritten, toolChecklist, turnEnded, withCleanViewNote,
   finalsFromMessages, revealsNotes, startsCard, turnOutcome,
-  agentSpawned, agentStatuses, reopened, face, FACES, SPINNER,
+  agentSpawned, agentStatuses, reopened, dots, face, FACES, SPINNER,
   activityOf, activitySet, fileChanged, trailLine, trailFor,
 } from './clean'
 
@@ -178,6 +178,16 @@ describe('clean view', () => {
     // No agents under it: motion only, never a made-up %
     const group = card(working, 3000, 'blue', {}, 2).rows[1]?.group
     expect(group).toEqual({ cells: face(3000 - working.startedAt), agents: [], more: 0 })
+  })
+
+  test("the working task's ellipsis counts up . .. ... and starts over, every half second", async () => {
+    expect([0, 500, 1000, 1500, 2000].map(ms => dots('Running a command…', ms)))
+      .toEqual(['Running a command.  ', 'Running a command.. ', 'Running a command...', 'Running a command.  ', 'Running a command.. '])
+    expect(dots('Running a command…', 499)).toBe(dots('Running a command…', 0))
+    // A label without an ellipsis is left as it is
+    expect(dots('1 of 3 · 33%', 500)).toBe('1 of 3 · 33%')
+    const working = { ...taskUpdated(four, { taskId: 't1', status: 'in_progress' }), activity: 'Reading files…' }
+    expect(card(working, working.startedAt + 1000, 'blue').rows[1]?.group?.label).toBe('Reading files...')
     expect(card(working, 0, 'blue').rows[0]?.group).toBeUndefined()
   })
 
@@ -270,10 +280,10 @@ describe('clean view', () => {
     expect(activityOf('TodoWrite', {})).toBeUndefined()
   })
 
-  test('the activity replaces Working… and labels the sliding bar', async () => {
+  test('the activity replaces Working… and labels the face', async () => {
     expect(card(activitySet(start, 'Reading files…'), 45_000, 'blue').footer).toBe('Reading files… 45s')
     const working = activitySet(taskUpdated(four, { taskId: 't1', status: 'in_progress' }), 'Running a command…')
-    expect(card(working, 0, 'blue').rows[1]?.group?.label).toBe('Running a command…')
+    expect(card(working, 0, 'blue').rows[1]?.group?.label).toBe(dots('Running a command…', -working.startedAt))
     expect(activitySet(start, undefined)).toEqual(start)
   })
 
