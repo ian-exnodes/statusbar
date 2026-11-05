@@ -166,10 +166,10 @@ describe('clean view', () => {
     const working = taskUpdated(four, { taskId: 't1', status: 'in_progress' })
     expect(card(working, 0, 'blue', {}, 3).rows[1]?.mark).toBe(SPINNER[3])
     expect(card(working, 0, 'blue', {}, SPINNER.length).rows[1]?.mark).toBe(SPINNER[0])
-    expect(shimmer(0)).toBe('━━━─────────')
-    expect(shimmer(2)).toBe('──━━━───────')
-    expect(shimmer(9)).toBe('─────────━━━')
-    expect(shimmer(10)).toBe('────────━━━─')
+    expect(shimmer(0)).toBe('▰▰▰▱▱▱▱▱▱▱▱▱')
+    expect(shimmer(2)).toBe('▱▱▰▰▰▱▱▱▱▱▱▱')
+    expect(shimmer(9)).toBe('▱▱▱▱▱▱▱▱▱▰▰▰')
+    expect(shimmer(10)).toBe('▱▱▱▱▱▱▱▱▰▰▰▱')
     expect(shimmer(18)).toBe(shimmer(0))
     expect(shimmer(5).length).toBe(TASK_CELLS)
     // No agents under it: motion only, never a made-up %
@@ -191,7 +191,7 @@ describe('clean view', () => {
       .reduce((x, d, i) => agentSpawned(x, `a${i}`, d), working)
     const group = card(c, 0, 'blue', { a0: 'completed', a1: 'running' }, 1).rows[1]?.group
     expect(group?.label).toBe('1 of 3 · 33%')
-    expect(group?.cells).toBe('━━━━────────')
+    expect(group?.cells).toBe('▰▰▰▰▱▱▱▱▱▱▱▱')
     expect(group?.agents.map(a => `${a.mark} ${a.subject} ${a.label}`)).toEqual([
       '✓ security review Done', `${SPINNER[1]} performance review Running`, `${SPINNER[1]} test coverage review Running`,
     ])

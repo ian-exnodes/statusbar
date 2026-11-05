@@ -11,13 +11,11 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
-## 0.9.9 (2026-11-05)
+## 0.9.10 (2026-11-05)
 
-### Fixed
+### Changed
 
-- Clean View's task bar drew uneven cells and ran into its label (`▱▱▰▰▰▱▱Running a command…`): many terminal fonts
-  lack `▰▱`, so another font drew them wider than a cell. It now uses the same `━─` as the status bar's own bars,
-  which terminals draw one cell each: `──━━━─────── Running a command…`.
+- Clean View's task bar is back to `▰▱`, as before 0.9.9.
 
 ## 0.9.8 (2026-11-05)
 

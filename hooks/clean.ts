@@ -92,7 +92,7 @@ export const shimmer = (frame: number, block = 3) => {
   const span = TASK_CELLS - block
   const at = frame % (span * 2)
   const pos = at <= span ? at : span * 2 - at
-  return Array.from({ length: TASK_CELLS }, (_, i) => i >= pos && i < pos + block ? '━' : '─').join('')
+  return Array.from({ length: TASK_CELLS }, (_, i) => i >= pos && i < pos + block ? '▰' : '▱').join('')
 }
 
 const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<string, string>>, accent: string, spin: string): CardGroup => {
@@ -102,7 +102,7 @@ const agentGroup = (agents: readonly CleanAgent[], statusById: Readonly<Record<s
   const percent = Math.round((finished / agents.length) * 100)
   const filled = Math.round((finished / agents.length) * TASK_CELLS)
   return {
-    cells: '━'.repeat(filled) + '─'.repeat(TASK_CELLS - filled),
+    cells: '▰'.repeat(filled) + '▱'.repeat(TASK_CELLS - filled),
     label: `${finished} of ${agents.length} · ${percent}%${failed ? ` · ${failed} failed` : ''}`,
     ...(failed ? { color: 'red' } : {}),
     agents: agents.slice(0, AGENTS_SHOWN).map((a, i): CardAgentRow =>
