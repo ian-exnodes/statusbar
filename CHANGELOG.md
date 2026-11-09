@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.13 (2026-11-09)
+
+### Fixed
+
+- After `/clear` the status bar disappeared until the next reply, and Clean View was off for the cleared session:
+  `/clear` wipes the plugin's session values and Claude Code starts no new session for it. Both now come back
+  within a second.
+
 ## 0.9.12 (2026-11-05)
 
 ### Changed

@@ -234,6 +234,14 @@ async function seedTurn($: EngineInterface) {
   }
 }
 
+// What a session needs before its first prompt: at session start, and again after a /clear
+async function setUp($: EngineInterface) {
+  await loadCleanView($)
+  if (await read($, cleanView)) await registerChecklist($)
+  await seedTurn($)
+  await refresh($)
+}
+
 // Live figures between events, like a statusLine command re-run by the CLI; git stays on events.
 // The model is read here too: no event reaches a user plugin when it changes (an interactive /model raises
 // no command.run, and cc-plugin-sec-default keeps classic.PostModelSwitch from user-tier plugins)
@@ -243,6 +251,8 @@ async function tick($: EngineInterface) {
   const [usage, now, model, shown, isOn, c] = await Promise.all([
     $.session.usage(), $.clock.now(), $.session.model(), read($, figures), read($, cleanView), read($, checklist),
   ])
+  // /clear wipes the session's values and fires no session.start; the timers live on, so set up again here
+  if (shown === null) return setUp($)
   const live = {
     model,
     percent: usage.context.percent ?? 0,
@@ -252,7 +262,7 @@ async function tick($: EngineInterface) {
     quotas: quotas(usage.rateLimits, now),
   }
   const isTiming = isOn && c !== null && c.endedAt === undefined
-  if (shown !== null && (isTiming || !sameRows(shown, { ...shown, ...live }))) {
+  if (isTiming || !sameRows(shown, { ...shown, ...live })) {
     await update($, figures, f => f && { ...f, ...live })
   }
   if (isOn && c?.agents?.length) {
@@ -318,10 +328,7 @@ export const register: Register = (on, options) => {
     // A failed read means no offer, never a skipped session start
     canOffer = isWindows && await Promise.all([$.env.get('SSH_CONNECTION'), $.env.get('SSH_CLIENT'), $.env.get('SSH_TTY'), $.store.get('fullscreenAsked')])
       .then(([conn, client, tty, isAsked]) => !conn && !client && !tty && isAsked !== true, () => false)
-    await loadCleanView($)
-    if (await read($, cleanView)) await registerChecklist($)
-    await seedTurn($)
-    await refresh($)
+    await setUp($)
     ticker?.cancel()
     ticker = $.clock.every(1000, () => tick($))
     animator?.cancel()
