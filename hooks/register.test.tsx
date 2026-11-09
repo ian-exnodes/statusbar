@@ -21,6 +21,8 @@ type World = {
   toasts: string[]
   /** How many times the plugin wrote its `figures` atom. */
   figureWrites: number
+  /** Keys a `/clear` wiped and nothing has written since: they read as never written, as the host's do. */
+  wiped?: Set<string>
 }
 
 const fresh = (over: Partial<World> = {}): World =>
@@ -55,7 +57,8 @@ function world(on: On, w: World): MockClock {
   on('ui.render', { component: 'Spinner' }, ($, e) => { const { Text } = $.ui.resolve(e); return <Text>{e.props.message ?? e.props.word}</Text> })
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('ui.render', ($, e) => { const { Box } = $.ui.resolve(e); return <Box /> })
-  on('state.set', (_$, e, next) => { if (e.key === 'figures') w.figureWrites++; return next(e) })
+  on('state.set', (_$, e, next) => { if (e.key === 'figures') w.figureWrites++; w.wiped?.delete(e.key); return next(e) })
+  on('state.get', (_$, e, next) => w.wiped?.has(e.key) ? { value: { value: undefined, version: 0 } } : next(e))
   on('process.run', (_$, e) => {
     if (e.argv[0] !== 'git') return ok('')
     w.gitRuns.push([...e.argv])
@@ -67,6 +70,9 @@ function world(on: On, w: World): MockClock {
 }
 
 const start = async ($: Engine) => { await $.session.start({ cwd: '/x/statusbar', surface: 'terminal', isInteractive: true }) }
+
+// What /clear does beneath the plugin: the session's named values are gone, and no session.start follows
+const clear = (w: World) => { w.wiped = new Set(['figures', 'cleanView', 'checklist', 'effort', 'lastTurnTokens', 'turnDelta', 'tokensOut', 'cacheRead']) }
 
 const HINT = { plugin: 'statusbar', surface: 'terminal', component: 'PromptHint', props: { isDraft: false, isWorking: false, hint: '' } } as const
 const BAND = {
@@ -296,6 +302,23 @@ describe('the 1s tick', () => {
     expect(w.figureWrites).toBe(after)
     await clock.advance(60_000 - clock.now())
     expect(w.figureWrites).toBe(after + 1)
+  })
+
+  test('after /clear the status bar and Clean View come back within a second', async ($, on) => {
+    const w = fresh({ isClean: true })
+    const clock = world(on, w)
+    await start($)
+    clear(w)
+    const gone = await $.ui.mount(HINT)
+    expect(await gone.find({ type: 'Text', text: '🌿 main' })).toBeUndefined()
+    await gone.unmount()
+    await clock.advance(1_000)
+    const ui = await $.ui.mount(HINT)
+    expect(await ui.find({ type: 'Text', text: '🌿 main' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: ' ◐ Clean' })).toBeDefined()
+    await ui.unmount()
+    const once = await $.prompt.submit({ text: 'fix the bug', wait: false, origin: COMPOSER })
+    expect(once.context).toContain(CLEAN_VIEW_NOTE)
   })
 
   test('a working card still gets a write every second, for its seconds timer', async ($, on) => {
