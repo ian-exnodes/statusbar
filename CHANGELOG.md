@@ -11,6 +11,14 @@ claude plugin update statusbar@ian-exnodes
 
 Then `/reload-plugins` in an open session, or start a new `claude`.
 
+## 0.9.14 (2026-11-17)
+
+### Changed
+
+- The picker's MODEL families come from Claude Code's own Model list in `/config`, so a new family shows up by itself.
+  A family button shows the newest version you have run, else just the family name, and always switches to that
+  family's newest model. Fable 5.2 now shows as itself instead of under a "Fable 5.1" label.
+
 ## 0.9.13 (2026-11-09)
 
 ### Fixed
