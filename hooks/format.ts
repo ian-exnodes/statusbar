@@ -4,21 +4,15 @@ import type { StatusEffort, StatusFigures, StatusQuota } from '../types'
 // isPicker: drawn as the button that opens the model and effort picker
 export type Segment = { text: string; color?: string; isPicker?: true }
 
+const capital = (name: string) => `${name.charAt(0).toUpperCase()}${name.slice(1)}`
+
 // claude-opus-5-5 → Opus 5.5; anything else shown as is
 export const prettyModel = (id: string) => {
   const [, name, major, minor] = /^claude-([a-z]+)-(\d+)-(\d+)/.exec(id) ?? []
-  return name ? `${name.charAt(0).toUpperCase()}${name.slice(1)} ${major}.${minor}` : id
+  return name ? `${capital(name)} ${major}.${minor}` : id
 }
 
 export const EFFORTS: readonly StatusEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
-
-// The models every picker shows; pickerModels adds the ones the person has used (modelSettings)
-export const MODELS = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
-  { id: 'claude-opus-5-5', label: 'Opus 5.5' },
-  { id: 'claude-fable-5-1', label: 'Fable 5.1' },
-] as const
 
 const FAMILY_COLORS: Record<string, string> = { opus: 'magenta', sonnet: 'blue', haiku: 'green', fable: 'yellow' }
 
@@ -49,7 +43,14 @@ export type EffortSettings = { effortLevel?: unknown; modelSettings?: Record<str
 export const defaultEffort = (settings: EffortSettings, model: string) =>
   parseEffort(settings.modelSettings?.[model]?.effortLevel) ?? parseEffort(settings.effortLevel)
 
-export type PickerModel = { id: string; label: string }
+// A button's alias is the family /model takes; an older-version slot has none
+export type PickerModel = { id: string; label: string; alias?: string }
+
+// family → newest id seen in a session
+export type SeenModels = Record<string, string>
+
+// The families /config's Model row can offer: known ones first in a fixed order
+export const FAMILIES: readonly string[] = ['haiku', 'sonnet', 'opus', 'fable']
 
 // ponytail: 6 fit one picker row at 120 columns; a wider list would need a second row
 const PICKER_MAX = 6
@@ -60,14 +61,33 @@ const version = (id: string) => {
   return Number(major) + Number(minor) / 100
 }
 
-// /effort saves a level per model id in modelSettings: any Claude id there is one the person has used.
-// Aliases (opus), 'default' and other vendors' ids have no claude-<family>-<n> and are left out.
+// The Model row's bare names (sonnet, opus…) are the families; default, best and *plan are modes, [1m] is a variant
+export const familiesFrom = (options: readonly string[] | undefined): string[] => {
+  const names = (options ?? []).filter(o => /^[a-z]+$/.test(o) && o !== 'default' && o !== 'best' && !o.endsWith('plan'))
+  const out = [...FAMILIES.filter(f => names.includes(f)), ...new Set(names.filter(o => !FAMILIES.includes(o)))]
+  return out.length ? out : [...FAMILIES]
+}
+
+// A new map when id is a Claude id newer than the one kept for its family, else undefined (nothing to save)
+export const withSeen = (seen: SeenModels, id: string): SeenModels | undefined => {
+  const fam = id.startsWith('claude-') ? family(id) : undefined
+  const old = fam && seen[fam]
+  return fam && (!old || version(id) > version(old)) ? { ...seen, [fam]: id } : undefined
+}
+
+// One button per family, labelled by the newest id known (modelSettings, seen, the session's model), else its name.
+// /effort saves a level per model id in modelSettings: any Claude id there is one the person has used, and an older
+// one than its family's button gets its own slot. Aliases, 'default' and other vendors' ids have no claude-<family>-<n>.
 // Past the cap the newest stay, and the session's model always keeps a slot so the picker can highlight it
-export const pickerModels = (settings: EffortSettings, current?: string): PickerModel[] => {
-  const found: PickerModel[] = [...MODELS]
-  const used = Object.keys(settings.modelSettings ?? {}).sort((a, b) => version(b) - version(a))
-  for (const id of used) {
-    if (family(id) && !found.some(m => sameModel(m.id, id))) found.push({ id, label: prettyModel(id) })
+export const pickerModels = (settings: EffortSettings, current?: string, families: readonly string[] = FAMILIES, seen: SeenModels = {}): PickerModel[] => {
+  const known = [...Object.keys(settings.modelSettings ?? {}), ...Object.values(seen), ...(current ? [current] : [])].filter(id => id.startsWith('claude-') && family(id))
+  const newest = (fam: string) => known.filter(id => family(id) === fam).reduce<string | undefined>((best, id) => !best || version(id) > version(best) ? id : best, undefined)
+  const found: PickerModel[] = families.map(fam => {
+    const id = newest(fam)
+    return { id: id ?? fam, label: id ? prettyModel(id) : capital(fam), alias: fam }
+  })
+  for (const id of [...new Set(known)].sort((a, b) => version(b) - version(a))) {
+    if (!found.some(m => sameModel(m.id, id))) found.push({ id, label: prettyModel(id) })
   }
   const shown = found.slice(0, PICKER_MAX)
   const own = current && found.find(m => sameModel(m.id, current))

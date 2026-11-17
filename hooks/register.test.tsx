@@ -14,6 +14,18 @@ type World = {
   git?: string
   messages?: { role: 'user' | 'assistant'; text: string }[]
   modelSettings?: Record<string, { effortLevel?: string }>
+  /** What session.model returns; default claude-opus-5-5. */
+  model?: string
+  /** The options of /config's Model row; 'fail' makes config.list reject, absent leaves the row out. */
+  modelRow?: string[] | 'fail'
+  /** A successful config.set of the Model row also moves the session to this model. */
+  setsModel?: string
+  /** config.set refuses (a dialog must decide). */
+  denySet?: boolean
+  /** store.get of latestModels rejects. */
+  failSeen?: boolean
+  /** Keys the plugin wrote to its store. */
+  storeWrites: string[]
   /** usage.startedAt; the mock clock starts at 0. */
   startedAt?: number
   gitRuns: string[][]
@@ -26,7 +38,7 @@ type World = {
 }
 
 const fresh = (over: Partial<World> = {}): World =>
-  ({ git: '# branch.oid abc1234def\n# branch.head main\n', gitRuns: [], commands: [], toasts: [], figureWrites: 0, ...over })
+  ({ git: '# branch.oid abc1234def\n# branch.head main\n', gitRuns: [], storeWrites: [], commands: [], toasts: [], figureWrites: 0, ...over })
 
 const ok = (stdout: string, exitCode = 0) =>
   ({ value: { exitCode, stdout, stderr: exitCode ? 'fatal' : '', isStdoutTruncated: false, isStderrTruncated: false } })
@@ -34,20 +46,31 @@ const ok = (stdout: string, exitCode = 0) =>
 /** Stands in for the engine and git beneath the plugin. */
 function world(on: On, w: World): MockClock {
   const clock = mock.clock(on, { now: 0 })
-  mock.store(on, { ...(w.isClean ? { cleanView: true } : {}), ...w.store })
+  // mock.store, plus a record of what the plugin wrote
+  const held = new Map<string, unknown>(Object.entries({ ...(w.isClean ? { cleanView: true } : {}), ...w.store }))
+  on('store.get', (_$, e) => w.failSeen && e.key === 'latestModels' ? { deny: 'down' } : { value: held.get(e.key) })
+  on('store.set', (_$, e) => { w.storeWrites.push(e.key); held.set(e.key, e.value); return { value: undefined } })
   on('env.get', (_$, e) => ({ value: w.env?.[e.name] }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: '/x/statusbar' }))
-  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.model', () => ({ value: w.model ?? 'claude-opus-5-5' }))
   on('session.usage', () => ({ value: { startedAt: w.startedAt ?? 0, context: { percent: 10, tokens: 20_000, window: 200_000 }, rateLimits: [] } }))
   on('session.messages', () => ({ value: (w.messages ?? []).map(m => ({ ...m, toolUses: [] })) }))
   on('settings.read', () => ({ value: { modelSettings: w.modelSettings ?? {} } as never }))
+  on('config.list', () => w.modelRow === 'fail' ? { deny: 'no' } : {
+    value: w.modelRow ? [{ key: 'model', label: 'Model', kind: 'choice', value: 'opus', options: w.modelRow, provider: { plugin: 'engine', tier: 'core' }, isLocked: false }] : [],
+  } as never)
   on('agent.list', () => ({ value: [] }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   // Without this, Clean View's checklist tool fails to register, the plugin toasts, and Clean View stays off
   on('tool.register', (_$, e) => ({ value: { tool: `mcp__statusbar__${e.name}` } }))
   on('command.run', (_$, e) => { w.commands.push(`${e.command} ${e.args}`.trim()); return { text: '' } })
-  on('config.set', (_$, e) => { w.commands.push(`config ${e.key}=${String(e.value)}`); return { value: e.value } })
+  on('config.set', (_$, e) => {
+    if (w.denySet) return { deny: 'ask' }
+    w.commands.push(`config ${e.key}=${String(e.value)}`)
+    if (e.key === 'model' && w.setsModel) w.model = w.setsModel
+    return { value: e.value }
+  })
   on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context }))
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
@@ -343,6 +366,79 @@ describe('the model picker', () => {
     expect(await ui.find({ type: 'Button', text: 'Opus 4.1' })).toBeDefined()
     await ui.press({ key: 'model-claude-opus-4-1' })
     expect(w.commands).toContain('model claude-opus-4-1')
+    await ui.unmount()
+  })
+
+  test('a family Claude Code adds shows up, and picking it sets the alias', async ($, on) => {
+    const w = fresh({ modelRow: ['default', 'sonnet', 'opus', 'haiku', 'fable', 'zeta', 'opusplan'] })
+    world(on, w); await start($); await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Button', text: 'Zeta' })).toBeDefined()
+    await ui.press({ key: 'model-zeta' })
+    expect(w.commands).toContain('config model=zeta')
+    await ui.unmount()
+  })
+
+  test('the version a session ran on is remembered for the next session', async ($, on) => {
+    const w = fresh({ model: 'claude-fable-5-2' })
+    world(on, w); await start($)
+    w.model = 'claude-opus-5-5'; await start($); await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Button', text: 'Fable 5.2' })).toBeDefined()
+    expect(await ui.find({ type: 'Button', text: 'Opus 5.5' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('the same model again does not write the store', async ($, on) => {
+    const w = fresh(); world(on, w); await start($)
+    const writes = w.storeWrites.filter(k => k === 'latestModels').length
+    expect(writes).toBeGreaterThan(0)
+    await $.session.measure({ context: { window: 200_000 }, rateLimits: [], changed: [] })
+    expect(w.storeWrites.filter(k => k === 'latestModels').length).toBe(writes)
+  })
+
+  test('a pick moves the label and the highlight at once', async ($, on) => {
+    const w = fresh({ setsModel: 'claude-sonnet-5-5' })
+    world(on, w); await start($); await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Button', text: 'Sonnet' })).toBeDefined()
+    await ui.press({ key: 'model-sonnet' })
+    await ui.redraw(BAND.props)
+    expect(await ui.find({ type: 'Button', text: 'Sonnet 5.5' })).toBeDefined()
+    expect(await ui.find({ type: 'Box', backgroundColor: 'blue' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a model changed outside the picker (a /model dialog) shows on the next tick', async ($, on) => {
+    const w = fresh()
+    const clock = world(on, w); await start($); await $.command.run(STATUSBAR)
+    w.model = 'claude-sonnet-5-5'
+    await clock.advance(1_000)
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Button', text: 'Sonnet 5.5' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a refused config.set falls back to /model with the alias', async ($, on) => {
+    const w = fresh({ denySet: true })
+    world(on, w); await start($); await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    await ui.press({ key: 'model-sonnet' })
+    expect(w.commands).toContain('model sonnet')
+    await ui.unmount()
+  })
+
+  test('an unreadable latestModels is not overwritten by the next write', async ($, on) => {
+    const w = fresh({ failSeen: true })
+    world(on, w); await start($)
+    expect(w.storeWrites).not.toContain('latestModels')
+  })
+
+  test('without the Model row, or with a broken store value, the four families still show', async ($, on) => {
+    const w = fresh({ modelRow: 'fail', store: { latestModels: 'junk' } })
+    world(on, w); await start($); await $.command.run(STATUSBAR)
+    const ui = await $.ui.mount(BAND)
+    for (const text of ['Haiku', 'Sonnet', 'Opus 5.5', 'Fable']) expect(await ui.find({ type: 'Button', text })).toBeDefined()
     await ui.unmount()
   })
 })

@@ -87,11 +87,15 @@ The 5h and 7d bars appear only on a Claude subscription, once Claude Code has re
 
 Press `⚙ Command` (or run `/statusbar`) to open a small box above the prompt:
 
-    MODEL   Haiku 4.5  Sonnet 5.5  Opus 5.5  Fable 5.1   ✕
+    MODEL   Haiku 5.5  Sonnet 5.5  Opus  Fable 5.2   ✕
     EFFORT  Low  Medium  High  Xhigh  Max
 
-Models you have set an effort for with `/effort` (saved in `modelSettings`) are added after these, newest first, up to 6 in
-all (the model you are on always keeps a place), so a new model shows up once you have used it. Those switch with `/model <id>`, so an older Opus stays that Opus.
+The MODEL families come from Claude Code's own Model list in `/config`, so a new family shows up by itself. A family
+button shows the newest version you have run (`Fable 5.2`), or just the family name (`Opus`) until you have run one.
+A family button always switches to that family's newest model.
+
+Older versions of a family that you have set an effort for with `/effort` (saved in `modelSettings`) are added after these,
+newest first, up to 6 in all (the model you are on always keeps a place). Those switch with `/model <id>`, so an older Opus stays that Opus.
 
 The current model and effort are highlighted. A model is set through `/config`'s Model setting, which switches
 at once and, like `/model`, also makes it your default for new sessions. When Claude Code needs to ask first (in a

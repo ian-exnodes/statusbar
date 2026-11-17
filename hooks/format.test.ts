@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { barColor, chunks, defaultEffort, meter, effortColor, effortFromCommand, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens } from './format'
+import { FAMILIES, barColor, chunks, defaultEffort, meter, effortColor, effortFromCommand, familiesFrom, family, mainEffort, modelColor, parseEffort, parseGitStatus, pickerModels, prettyModel, quotaColor, quotas, rows, sameModel, sameRows, tokens, withSeen } from './format'
 
 const base = { model: 'claude-opus-5-5', dir: '/x/main-2', branch: 'main', staged: 1, modified: 2, untracked: 3,
   percent: 37, tokensIn: 45_230, tokensOut: 1_200, cacheRead: 38_100, usd: 1.234, ms: 125_000, quotas: [] }
@@ -230,24 +230,59 @@ describe('statusbar rows', () => {
 })
 
 describe('the model picker', () => {
-  test('the picker adds models from modelSettings after the fixed ones, once each', async () => {
-    const ids = (s: Parameters<typeof pickerModels>[0]) => pickerModels(s).map(m => m.label)
-    expect(ids({})).toEqual(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.1'])
-    expect(ids({ modelSettings: { 'claude-opus-5-5': {}, 'claude-opus-4-1': {}, default: {}, opus: {}, 'gpt-5': {} } }))
-      .toEqual(['Haiku 4.5', 'Sonnet 5.5', 'Opus 5.5', 'Fable 5.1', 'Opus 4.1'])
-    expect(pickerModels({ modelSettings: { 'claude-opus-4-1': {} } }).at(-1)).toEqual({ id: 'claude-opus-4-1', label: 'Opus 4.1' })
+  const ROW = ['default', 'sonnet', 'opus', 'haiku', 'fable', 'best', 'sonnet[1m]', 'opus[1m]', 'fable[1m]', 'opusplan']
+  const labels = (...a: Parameters<typeof pickerModels>) => pickerModels(...a).map(m => m.label)
+
+  test('families come from the Model row: bare names in a fixed order, new ones after', async () => {
+    expect(familiesFrom(ROW)).toEqual(['haiku', 'sonnet', 'opus', 'fable'])
+    expect(familiesFrom(['default', 'zeta', 'sonnet', 'opus', 'haiku', 'fable', 'zetaplan'])).toEqual(['haiku', 'sonnet', 'opus', 'fable', 'zeta'])
+    expect(familiesFrom(undefined)).toEqual([...FAMILIES])
+    expect(familiesFrom([])).toEqual([...FAMILIES])
+    expect(familiesFrom(['default', 'best'])).toEqual([...FAMILIES])
+    expect(familiesFrom(['default', 'sonnet', 'opus', 'haiku'])).toEqual(['haiku', 'sonnet', 'opus'])
   })
 
-  test('past the cap, the current model and the newest ids stay, whatever order settings lists them in', async () => {
-    const old = { 'claude-opus-4-1': {}, 'claude-sonnet-4-1': {}, 'claude-opus-4-5': {}, 'claude-opus-6-0': {} }
-    expect(pickerModels({ modelSettings: old }).map(m => m.label).slice(4)).toEqual(['Opus 6.0', 'Opus 4.5'])
-    expect(pickerModels({ modelSettings: old }, 'claude-opus-4-1').map(m => m.label).slice(4)).toEqual(['Opus 6.0', 'Opus 4.1'])
-    expect(pickerModels({ modelSettings: old }, 'claude-opus-6-0')).toHaveLength(6)
+  test('a Bedrock or Vertex id never becomes a family label', async () => {
+    const id = 'us.anthropic.claude-opus-5-5-v1'
+    expect(labels({}, id)).toEqual(['Haiku', 'Sonnet', 'Opus', 'Fable'])
+    expect(labels({ modelSettings: { [id]: {} } }, undefined)).toEqual(['Haiku', 'Sonnet', 'Opus', 'Fable'])
   })
 
-  test('the picker row stays short: at most 6 models', async () => {
-    const many = Object.fromEntries(['1-0', '2-0', '3-0', '3-5'].map(v => [`claude-opus-${v}`, {}]))
-    expect(pickerModels({ modelSettings: many })).toHaveLength(6)
+  test('a family shows its version once known, else just its name, and switches by alias', async () => {
+    expect(labels({}, undefined)).toEqual(['Haiku', 'Sonnet', 'Opus', 'Fable'])
+    const seen = { fable: 'claude-fable-5-2', haiku: 'claude-haiku-4-5-20251001' }
+    expect(labels({}, 'claude-fable-5-2', FAMILIES, seen)).toEqual(['Haiku 4.5', 'Sonnet', 'Opus', 'Fable 5.2'])
+    const models = pickerModels({}, 'claude-fable-5-2', FAMILIES, seen)
+    expect(models[3]).toEqual({ id: 'claude-fable-5-2', label: 'Fable 5.2', alias: 'fable' })
+    expect(models[1]).toEqual({ id: 'sonnet', label: 'Sonnet', alias: 'sonnet' })
+    expect(labels({}, undefined, ['haiku', 'sonnet', 'opus', 'fable', 'zeta'])).toContain('Zeta')
+  })
+
+  test('the newest id of a family labels its button; older ones from modelSettings get their own slot', async () => {
+    const settings = { modelSettings: { 'claude-opus-4-1': {}, 'claude-opus-5-5': {}, default: {}, opus: {}, 'gpt-5': {} } }
+    expect(labels(settings, 'claude-opus-5-5')).toEqual(['Haiku', 'Sonnet', 'Opus 5.5', 'Fable', 'Opus 4.1'])
+    expect(pickerModels(settings).at(-1)).toEqual({ id: 'claude-opus-4-1', label: 'Opus 4.1' })
+  })
+
+  test('a [1m] session model lights its family button and adds no slot', async () => {
+    const models = pickerModels({}, 'claude-opus-5-5[1m]', FAMILIES, { opus: 'claude-opus-5-5[1m]' })
+    expect(models).toHaveLength(4)
+    expect(models[2]?.label).toBe('Opus 5.5')
+  })
+
+  test('a seen version is replaced only by a newer one, and only for a claude- id', async () => {
+    expect(withSeen({}, 'claude-fable-5-2')).toEqual({ fable: 'claude-fable-5-2' })
+    expect(withSeen({ opus: 'claude-opus-5-5' }, 'claude-opus-5-6')).toEqual({ opus: 'claude-opus-5-6' })
+    expect(withSeen({ opus: 'claude-opus-5-5' }, 'claude-opus-4-1')).toBeUndefined()
+    expect(withSeen({ opus: 'claude-opus-5-5' }, 'claude-opus-5-5')).toBeUndefined()
+    expect(withSeen({}, 'gpt-5')).toBeUndefined()
+    expect(withSeen({}, 'us.anthropic.claude-opus-5-5-v1')).toBeUndefined()
+  })
+
+  test('past the cap, the newest older ids stay and the current model keeps a slot', async () => {
+    const many = Object.fromEntries(['1-0', '2-0', '3-0', '3-5', '6-0'].map(v => [`claude-opus-${v}`, {}]))
+    expect(labels({ modelSettings: many })).toEqual(['Haiku', 'Sonnet', 'Opus 6.0', 'Fable', 'Opus 3.5', 'Opus 3.0'])
+    expect(labels({ modelSettings: many }, 'claude-opus-1-0').slice(4)).toEqual(['Opus 3.5', 'Opus 1.0'])
   })
 })
 

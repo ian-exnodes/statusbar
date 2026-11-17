@@ -61,6 +61,8 @@ The model list is fixed in code: Haiku 4.5, Sonnet 5.5, Opus 5.5, Fable 5.1 (`cl
 `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-1`). There is no API that lists the models a
 session may use; when a new model ships, the list is edited.
 
+Superseded by 2026-11-17-dynamic-model-list-design.md.
+
 ## Where the values come from
 
 | Value | Source |

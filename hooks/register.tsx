@@ -7,7 +7,8 @@ import {
   BAR_CELLS, addFinal, card, isFinalAnswer, startChecklist, taskCreated, taskUpdated, todosWritten, turnEnded,
   agentSpawned, agentStatuses, finalsFromMessages, isRunning, activityOf, activitySet, fileChanged, trailFor, trailLine, reopened, revealsNotes, startsCard, toolChecklist, checklistReply, turnOutcome, withCleanViewNote,
 } from './clean'
-import { EFFORTS, GIT_STATUS, chunks, GIT_TIMEOUT_MS, MODELS, defaultEffort, effortColor, effortFromCommand, family, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows } from './format'
+import { EFFORTS, GIT_STATUS, chunks, GIT_TIMEOUT_MS, FAMILIES, defaultEffort, effortColor, effortFromCommand, familiesFrom, mainEffort, modelColor, parseGitStatus, pickerModels, quotas, rows, sameModel, sameRows, withSeen } from './format'
+import type { PickerModel, SeenModels } from './format'
 
 const figures = atom({ plugin: 'statusbar', key: 'figures' } as const, null)
 const tokensOut = atom({ plugin: 'statusbar', key: 'tokensOut' } as const, 0)
@@ -182,11 +183,35 @@ const cleanCard = async ($: EngineInterface, e: RenderInput<'AbovePrompt'>) => {
   )
 }
 
+// The families /config's Model row offers, read at session start and when the picker opens
+let families: readonly string[] = FAMILIES
+
+const readFamilies = async ($: EngineInterface) => {
+  const rows = await $.config.list().catch(() => undefined)
+  families = familiesFrom(rows?.find(r => r.key === 'model')?.options)
+}
+
+// The newest id seen per family; the store is untyped, so anything but a plain object of strings reads as none
+const readSeen = (value: unknown): SeenModels => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+  return Object.values(value).every(v => typeof v === 'string') ? value as SeenModels : {}
+}
+
+const lost = Symbol('unreadable')
+
 async function refresh($: EngineInterface) {
-  const [model, dir, usage, now, out, cached, delta, picked, settings] = await Promise.all([
+  const [model, dir, usage, now, out, cached, delta, picked, settings, stored] = await Promise.all([
     $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, cacheRead),
-    read($, turnDelta), read($, effort), $.settings.read(),
+    read($, turnDelta), read($, effort), $.settings.read(), $.store.get('latestModels').catch(() => lost),
   ])
+  const isSeenLost = stored === lost
+  let seen = readSeen(stored === lost ? undefined : stored)
+  const newer = withSeen(seen, model)
+  // A read that failed says nothing about what is kept: labels go without it, and nothing is written over it
+  if (newer && !isSeenLost) {
+    seen = newer
+    await $.store.set('latestModels', newer).catch(() => undefined)
+  }
   // undefined: git timed out or could not start, so the last figures stay; null: not a repo
   const status = await $.process.run(GIT_STATUS, { timeoutMs: GIT_TIMEOUT_MS }).catch(() => undefined)
   const git = status === undefined ? undefined : status.exitCode === 0 ? parseGitStatus(status.stdout) : null
@@ -210,7 +235,7 @@ async function refresh($: EngineInterface) {
       ms: now - usage.startedAt,
       turnDelta: delta ?? undefined,
       quotas: quotas(usage.rateLimits, now),
-      models: pickerModels(settings as Parameters<typeof pickerModels>[0], model),
+      models: pickerModels(settings as Parameters<typeof pickerModels>[0], model, families, seen),
     }
   })
 }
@@ -262,6 +287,8 @@ async function tick($: EngineInterface) {
     quotas: quotas(usage.rateLimits, now),
   }
   const isTiming = isOn && c !== null && c.endedAt === undefined
+  // A model changed outside the picker (the /model dialog, a typed /model) moves the labels and the highlight too
+  if (model !== shown.model) return refresh($)
   if (isTiming || !sameRows(shown, { ...shown, ...live })) {
     await update($, figures, f => f && { ...f, ...live })
   }
@@ -328,6 +355,7 @@ export const register: Register = (on, options) => {
     // A failed read means no offer, never a skipped session start
     canOffer = isWindows && await Promise.all([$.env.get('SSH_CONNECTION'), $.env.get('SSH_CLIENT'), $.env.get('SSH_TTY'), $.store.get('fullscreenAsked')])
       .then(([conn, client, tty, isAsked]) => !conn && !client && !tty && isAsked !== true, () => false)
+    await readFamilies($)
     await setUp($)
     ticker?.cancel()
     ticker = $.clock.every(1000, () => tick($))
@@ -421,6 +449,8 @@ export const register: Register = (on, options) => {
 
   // A second way in, in case a click on ⚙ under the prompt does not reach the plugin
   on('command.run', { command: 'statusbar' }, async $ => {
+    await readFamilies($)
+    await refresh($)
     await togglePicker($)
     return { text: '' }
   })
@@ -462,13 +492,11 @@ export const register: Register = (on, options) => {
     }
     // /config's Model row switches in milliseconds; /model takes a second or two behind its own screen.
     // The row refuses what only a dialog may decide (the long-conversation confirm, Fable's consent): then /model asks
-    const pickModel = async (id: string) => {
-      // /config's Model row takes a family alias, which means that family's newest model: right for the fixed list only
-      const alias = MODELS.some(m => m.id === id) ? family(id) : undefined
-      const set = alias ? await $.config.set({ key: 'model', value: alias }).catch(() => undefined) : undefined
-      if (set?.deny !== undefined || set === undefined) return void run('model', id)
-      const model = await $.session.model()
-      await update($, figures, now => now && { ...now, model })
+    const pickModel = async (m: PickerModel) => {
+      // /config's Model row takes a family alias, which means that family's newest model
+      const set = m.alias ? await $.config.set({ key: 'model', value: m.alias }).catch(() => undefined) : undefined
+      if (set?.deny !== undefined || set === undefined) return void run('model', m.alias ?? m.id)
+      await refresh($)
     }
     const option = (key: string, label: string, fill: string | undefined, onPress: () => void) => (
       <Box key={key} backgroundColor={fill} paddingX={1}>
@@ -482,8 +510,8 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column" borderStyle="round" borderColor={modelColor(f.model)} paddingX={1}>
           <Box>
             <Box width={12}><Text dimColor>MODEL</Text></Box>
-            {(f.models ?? MODELS).map(m => option(`model-${m.id}`, m.label,
-              sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m.id)))}
+            {(f.models ?? pickerModels({}, f.model, families)).map(m => option(`model-${m.alias ?? m.id}`, m.label,
+              sameModel(m.id, f.model) ? modelColor(m.id) : undefined, () => void pickModel(m)))}
             <Box flexGrow={1} />
             <Button key="close" plain label="✕" onPress={() => void closePicker($)} />
           </Box>
