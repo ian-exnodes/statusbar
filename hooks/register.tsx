@@ -197,14 +197,18 @@ const readSeen = (value: unknown): SeenModels => {
   return Object.values(value).every(v => typeof v === 'string') ? value as SeenModels : {}
 }
 
+const lost = Symbol('unreadable')
+
 async function refresh($: EngineInterface) {
   const [model, dir, usage, now, out, cached, delta, picked, settings, stored] = await Promise.all([
     $.session.model(), $.session.cwd(), $.session.usage(), $.clock.now(), read($, tokensOut), read($, cacheRead),
-    read($, turnDelta), read($, effort), $.settings.read(), $.store.get('latestModels').catch(() => undefined),
+    read($, turnDelta), read($, effort), $.settings.read(), $.store.get('latestModels').catch(() => lost),
   ])
-  let seen = readSeen(stored)
+  const isSeenLost = stored === lost
+  let seen = readSeen(stored === lost ? undefined : stored)
   const newer = withSeen(seen, model)
-  if (newer) {
+  // A read that failed says nothing about what is kept: labels go without it, and nothing is written over it
+  if (newer && !isSeenLost) {
     seen = newer
     await $.store.set('latestModels', newer).catch(() => undefined)
   }
@@ -283,6 +287,8 @@ async function tick($: EngineInterface) {
     quotas: quotas(usage.rateLimits, now),
   }
   const isTiming = isOn && c !== null && c.endedAt === undefined
+  // A model changed outside the picker (the /model dialog, a typed /model) moves the labels and the highlight too
+  if (model !== shown.model) return refresh($)
   if (isTiming || !sameRows(shown, { ...shown, ...live })) {
     await update($, figures, f => f && { ...f, ...live })
   }
@@ -444,6 +450,7 @@ export const register: Register = (on, options) => {
   // A second way in, in case a click on ⚙ under the prompt does not reach the plugin
   on('command.run', { command: 'statusbar' }, async $ => {
     await readFamilies($)
+    await refresh($)
     await togglePicker($)
     return { text: '' }
   })
@@ -489,8 +496,7 @@ export const register: Register = (on, options) => {
       // /config's Model row takes a family alias, which means that family's newest model
       const set = m.alias ? await $.config.set({ key: 'model', value: m.alias }).catch(() => undefined) : undefined
       if (set?.deny !== undefined || set === undefined) return void run('model', m.alias ?? m.id)
-      const model = await $.session.model()
-      await update($, figures, now => now && { ...now, model })
+      await refresh($)
     }
     const option = (key: string, label: string, fill: string | undefined, onPress: () => void) => (
       <Box key={key} backgroundColor={fill} paddingX={1}>

@@ -4,10 +4,12 @@ import type { StatusEffort, StatusFigures, StatusQuota } from '../types'
 // isPicker: drawn as the button that opens the model and effort picker
 export type Segment = { text: string; color?: string; isPicker?: true }
 
+const capital = (name: string) => `${name.charAt(0).toUpperCase()}${name.slice(1)}`
+
 // claude-opus-5-5 → Opus 5.5; anything else shown as is
 export const prettyModel = (id: string) => {
   const [, name, major, minor] = /^claude-([a-z]+)-(\d+)-(\d+)/.exec(id) ?? []
-  return name ? `${name.charAt(0).toUpperCase()}${name.slice(1)} ${major}.${minor}` : id
+  return name ? `${capital(name)} ${major}.${minor}` : id
 }
 
 export const EFFORTS: readonly StatusEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -61,8 +63,9 @@ const version = (id: string) => {
 
 // The Model row's bare names (sonnet, opus…) are the families; default, best and *plan are modes, [1m] is a variant
 export const familiesFrom = (options: readonly string[] | undefined): string[] => {
-  const extra = (options ?? []).filter(o => /^[a-z]+$/.test(o) && o !== 'default' && o !== 'best' && !o.endsWith('plan') && !FAMILIES.includes(o))
-  return [...FAMILIES, ...new Set(extra)]
+  const names = (options ?? []).filter(o => /^[a-z]+$/.test(o) && o !== 'default' && o !== 'best' && !o.endsWith('plan'))
+  const out = [...FAMILIES.filter(f => names.includes(f)), ...new Set(names.filter(o => !FAMILIES.includes(o)))]
+  return out.length ? out : [...FAMILIES]
 }
 
 // A new map when id is a Claude id newer than the one kept for its family, else undefined (nothing to save)
@@ -77,11 +80,11 @@ export const withSeen = (seen: SeenModels, id: string): SeenModels | undefined =
 // one than its family's button gets its own slot. Aliases, 'default' and other vendors' ids have no claude-<family>-<n>.
 // Past the cap the newest stay, and the session's model always keeps a slot so the picker can highlight it
 export const pickerModels = (settings: EffortSettings, current?: string, families: readonly string[] = FAMILIES, seen: SeenModels = {}): PickerModel[] => {
-  const known = [...Object.keys(settings.modelSettings ?? {}), ...Object.values(seen), ...(current ? [current] : [])].filter(id => family(id))
+  const known = [...Object.keys(settings.modelSettings ?? {}), ...Object.values(seen), ...(current ? [current] : [])].filter(id => id.startsWith('claude-') && family(id))
   const newest = (fam: string) => known.filter(id => family(id) === fam).reduce<string | undefined>((best, id) => !best || version(id) > version(best) ? id : best, undefined)
   const found: PickerModel[] = families.map(fam => {
     const id = newest(fam)
-    return { id: id ?? fam, label: id ? prettyModel(id) : `${fam.charAt(0).toUpperCase()}${fam.slice(1)}`, alias: fam }
+    return { id: id ?? fam, label: id ? prettyModel(id) : capital(fam), alias: fam }
   })
   for (const id of [...new Set(known)].sort((a, b) => version(b) - version(a))) {
     if (!found.some(m => sameModel(m.id, id))) found.push({ id, label: prettyModel(id) })

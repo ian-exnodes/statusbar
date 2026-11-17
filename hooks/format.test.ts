@@ -239,6 +239,13 @@ describe('the model picker', () => {
     expect(familiesFrom(undefined)).toEqual([...FAMILIES])
     expect(familiesFrom([])).toEqual([...FAMILIES])
     expect(familiesFrom(['default', 'best'])).toEqual([...FAMILIES])
+    expect(familiesFrom(['default', 'sonnet', 'opus', 'haiku'])).toEqual(['haiku', 'sonnet', 'opus'])
+  })
+
+  test('a Bedrock or Vertex id never becomes a family label', async () => {
+    const id = 'us.anthropic.claude-opus-5-5-v1'
+    expect(labels({}, id)).toEqual(['Haiku', 'Sonnet', 'Opus', 'Fable'])
+    expect(labels({ modelSettings: { [id]: {} } }, undefined)).toEqual(['Haiku', 'Sonnet', 'Opus', 'Fable'])
   })
 
   test('a family shows its version once known, else just its name, and switches by alias', async () => {
