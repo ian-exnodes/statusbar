@@ -49,8 +49,8 @@ export type StatusFigures = {
   turnDelta?: number
   /** 5h and 7d windows; empty off a Claude subscription or before the first reading. */
   quotas: StatusQuota[]
-  /** The picker's models: the fixed list, then ids from modelSettings. */
-  models?: { id: string; label: string }[]
+  /** The picker's models: a button per family from the /config Model row, then older ids from modelSettings. */
+  models?: { id: string; label: string; alias?: string }[]
 }
 
 declare module 'claude-code' {

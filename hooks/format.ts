@@ -12,14 +12,6 @@ export const prettyModel = (id: string) => {
 
 export const EFFORTS: readonly StatusEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-// The models every picker shows; pickerModels adds the ones the person has used (modelSettings)
-export const MODELS = [
-  { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
-  { id: 'claude-opus-5-5', label: 'Opus 5.5' },
-  { id: 'claude-fable-5-1', label: 'Fable 5.1' },
-] as const
-
 const FAMILY_COLORS: Record<string, string> = { opus: 'magenta', sonnet: 'blue', haiku: 'green', fable: 'yellow' }
 
 // opus, sonnet…: also the alias /config's Model row takes. Not anchored, so a Bedrock or Vertex id
